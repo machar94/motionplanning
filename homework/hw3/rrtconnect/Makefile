@@ -1,6 +1,6 @@
 
 all:
-	@mkdir -p build; rm -f build/CMakeCache.txt
+	@mkdir -p build;
 	cd build && cmake .. && $(MAKE) $(PARALLEL_JOBS)
 
 install:
