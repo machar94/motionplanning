@@ -84,8 +84,6 @@ public:
 
     RRTNode* nearestNeighbor(RRTNode* const node) const;
 
-private:
-
     // Calculates the euclidian distance between two configurations
     float calcEuclidianDist(const std::vector<float>& q1,
                             const std::vector<float>& q2) const;
@@ -181,6 +179,8 @@ private:
     std::mt19937 gen;               // random number generator
     std::vector<std::uniform_real_distribution<float> > dists;
 
+    RobotBasePtr probot;            // Holds pointer to the PR2 robot in scene
+
 public:
 
     RRTConnect(EnvironmentBasePtr penv, std::istream& ss);
@@ -209,6 +209,12 @@ private:
     void printVector(std::string s, const std::vector<T>& v) const;
 
     void sampleConfiguration(std::vector<float>& q);
+
+    bool takeStepsToSample(RRTNode* node, const std::vector<float>& q);
+
+    bool stepToSample(RRTNode* node, 
+                      const std::vector<float>& sampleQ,
+                      std::vector<float>& newQ);
 
 };
  
@@ -302,7 +308,7 @@ bool RRTConnect::Init(std::ostream& sout, std::istream& sinput)
 
     std::vector<RobotBasePtr> vrobots;
     GetEnv()->GetRobots(vrobots);
-    RobotBasePtr probot = vrobots.at(0);
+    probot = vrobots.at(0);
 
     // Retrieve the lower and upper limits for all active joints
     probot->GetActiveDOFLimits(llim,ulim);
@@ -364,22 +370,107 @@ void RRTConnect::sampleConfiguration(std::vector<float>& q)
     }
     else
     {
-        for (auto & udist : dists)
+        std::vector<dReal> config;
+        while (true)
         {
-            q.push_back(udist(gen));
+            // Generate random sample config
+            for (auto & udist : dists)
+            {
+                config.push_back(udist(gen));
+            }
+
+            // Check for collision
+            probot->SetActiveDOFValues(config);
+            if(!GetEnv()->CheckCollision(RobotBaseConstPtr(probot)))
+            {
+                for (unsigned i = 0; i < config.size(); ++i)
+                {
+                    q[i] = config[i];
+                }
+                
+                biasCounter++;
+                break;
+            }
+            
+            config.clear();
         }
-        biasCounter++;
     }
     // printVector("Sample:", q);
 }
 
 bool RRTConnect::run(std::ostream& sout, std::istream& sinput)
 {
-    
-    for (int i = 0; i < 20; i++)
+    for (int i = 0; i < numSamples; i++)
     {
-        std::vector<float> config;
-        sampleConfiguration(config);
+        if (i % 10 == 0)
+        {
+            std::cout << "Processed " << i << " samples!" << std::endl;
+        }
+
+        std::vector<float> sampleQ;
+        sampleConfiguration(sampleQ);
+        RRTNode* nearestNode = tree.nearestNeighbor(sampleQ);
+        
+        // sampleQ has been reached successfully if it returns true
+        if(takeStepsToSample(nearestNode, sampleQ))
+        {
+            if (sampleQ == goalQ)
+            {
+                std::cout << "Goal configuration reached!\n";
+                break;
+            }
+        }
     }
     return true;
+}
+
+bool RRTConnect::takeStepsToSample(RRTNode* nearestNode, const std::vector<float>& sampleQ)
+{
+    std::vector<float> newQ;
+    RRTNode* currNode = nearestNode;
+    while (stepToSample(currNode, sampleQ, newQ))
+    {
+        RRTNode* newNode = new RRTNode(newQ, currNode);
+        tree.add(newNode);
+        currNode = newNode;
+
+        if (sampleQ == newQ)
+        {
+            if (newQ == goalQ)
+            {
+                goal = newNode;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+bool RRTConnect::stepToSample(RRTNode* node,
+    const std::vector<float>& sampleQ,
+    std::vector<float>& newQ)
+{
+    float dist = tree.calcEuclidianDist(node->getConfig(), sampleQ);
+    if (dist < stepSize)
+    {
+        newQ = sampleQ;
+    }
+    else
+    {
+        // Calculate step vector direction and normalize to a certain unit
+        // Apply step vector to the nearest neighbor node
+        std::vector<float> stepVector (sampleQ.size(), 0.0);
+        for (unsigned i = 0; i < sampleQ.size(); ++i)
+        {
+            stepVector[i] = sampleQ[i]-node->getConfig()[i];
+            stepVector[i] = stepVector[i] / dist * stepSize;
+            newQ[i] = node->getConfig()[i] + stepVector[i];
+        }
+    }
+    std::vector<dReal> vals(newQ.begin(), newQ.end());
+    probot->SetActiveDOFValues(vals);
+
+    // Return true if it is valid and save config to newQ
+    // Return false otherwise
+    return (!GetEnv()->CheckCollision(RobotBaseConstPtr(probot)));
 }
