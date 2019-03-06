@@ -407,7 +407,7 @@ bool RRTConnect::run(std::ostream& sout, std::istream& sinput)
             std::cout << "Processed " << i << " samples!" << std::endl;
         }
 
-        std::vector<float> sampleQ;
+        std::vector<float> sampleQ(startQ.size(), 0.0);
         sampleConfiguration(sampleQ);
         RRTNode* nearestNode = tree.nearestNeighbor(sampleQ);
         
@@ -426,7 +426,7 @@ bool RRTConnect::run(std::ostream& sout, std::istream& sinput)
 
 bool RRTConnect::takeStepsToSample(RRTNode* nearestNode, const std::vector<float>& sampleQ)
 {
-    std::vector<float> newQ;
+    std::vector<float> newQ(startQ.size(), 0.0);
     RRTNode* currNode = nearestNode;
     while (stepToSample(currNode, sampleQ, newQ))
     {
