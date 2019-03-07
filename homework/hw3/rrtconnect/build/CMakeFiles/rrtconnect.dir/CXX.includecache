@@ -27,6 +27,8 @@ math.h
 -
 random
 -
+time.h
+-
 
 /usr/local/include/openrave-0.9/openrave-core.h
 openrave/openrave.h

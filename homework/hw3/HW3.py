@@ -46,7 +46,6 @@ if __name__ == "__main__":
     RRTConnect = RaveCreateModule(env,'RRTConnect')
     env.AddModule(RRTConnect,args='')
     ### END INITIALIZING YOUR PLUGIN ###
-   
 
     # tuck in the PR2's arms for driving
     tuckarms(env,robot)
@@ -60,11 +59,13 @@ if __name__ == "__main__":
     waitrobot(robot)
 
     with env:
-        goalconfig = [0.449,-0.201,-0.151,0,0,-0.11,0]
+        # goalconfig = [0.449,-0.201,-0.151,0,0,-0.11,0]
+        goalconfig = [0.5255,1.29,-2.12,0,0,-1.38,0]
+        
         ### YOUR CODE HERE ###
         NUM_SAMPLES = 10000
-        GOAL_BIAS_VAL = 10
-        STEP_SIZE = 0.1
+        GOAL_BIAS_VAL = 10     # int value between (0, 100]
+        STEP_SIZE = 0.3
 
         # Register the start configuration
         startConfigStr = ' '.join([str(e) for e in startconfig])
@@ -84,8 +85,10 @@ if __name__ == "__main__":
         RRTConnect.SendCommand('setstepsize ' + str(STEP_SIZE))
 
         RRTConnect.SendCommand('init')
-        RRTConnect.SendCommand('printclass')
-        RRTConnect.SendCommand('run')
+        # RRTConnect.SendCommand('printclass')
+        # RRTConnect.SendCommand('run')
+        t = robot.GetTransform()
+        IPython.embed()
  
         ### END OF YOUR CODE ###
     waitrobot(robot)
