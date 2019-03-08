@@ -8,6 +8,7 @@ import openravepy
 import IPython
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 #### END OF YOUR IMPORTS ####
 
 if not __openravepy_build_doc__:
@@ -33,13 +34,22 @@ def plotStatistics(time, nodes, samples, goalbias):
     #print "Average Samples : %f" % (np.average(samples))
     #print "Average Nodes   : %f" % (np.average(nodes))
 
-    plt.rcParams.update({'font.size': 22})
+    FILENAME = 'goalBias.txt'
 
-    f_handle = file('goalBias.txt', 'a')
-    np.save(f_handle, goalbias)
-    np.save(f_handle, time)
-    np.save(f_handle, nodes)
-    np.save(f_handle, samples)
+    try:
+        os.remove(FILENAME)
+    except OSError:
+        pass
+
+    plt.rcParams.update({'font.size': 22})
+    np.set_printoptions(precision=2)
+    np.set_printoptions(suppress=True)
+
+    f_handle = file(FILENAME, 'a')
+    np.savetxt(f_handle, goalbias, delimiter=',', fmt='%1.2f')
+    np.savetxt(f_handle, time, delimiter=',', fmt='%1.2f')
+    np.savetxt(f_handle, nodes, delimiter=',', fmt='%1.2f')
+    np.savetxt(f_handle, samples, delimiter=',', fmt='%1.2f')
     f_handle.close()
     
 
@@ -79,13 +89,13 @@ if __name__ == "__main__":
     with env:
         # goalconfig = [0.449,-0.201,-0.151,0,0,-0.11,0]    # Actual goal
         # goalconfig = [0.5255,1.29,-2.12,0,0,-1.38,0]      # level 4 goal
-        goalconfig = [0.5255,1.29,-2.12,0,0,-0.11,0]      # level 3 goal
-        # goalconfig = [-0.15,1.29,-2.12,0,0,-1.38,0]       # level 2 goal
+        # goalconfig = [0.5255,1.29,-2.12,0,0,-0.11,0]      # level 3 goal
+        goalconfig = [-0.15,1.29,-2.12,0,0,-1.38,0]       # level 2 goal
         # goalconfig = [-0.15,-0.35,-1.73,0,0,-0.11,0]      # level 1 goal
 
         ### YOUR CODE HERE ###
         NUM_SAMPLES = 10000
-        GOAL_BIAS_VAL = 30     # int value between (0, 100]
+        GOAL_BIAS_VAL = 10     # int value between (0, 100]
         STEP_SIZE = 0.2
 
         # Register the start configuration
@@ -114,9 +124,9 @@ if __name__ == "__main__":
         goalBL  = np.empty(shape=[0,1])
 
         goalbias = 1;
-        while goalbias < 100:
+        while goalbias < 2:
             RRTConnect.SendCommand('resettree')
-            RRTConnect.SendCommand('setgoal ' + str(goalbias))
+            RRTConnect.SendCommand('setgoal ' + str(GOAL_BIAS_VAL))
             result = RRTConnect.SendCommand('run')
 
             data = [int(val) for val in result.split()]
@@ -127,7 +137,7 @@ if __name__ == "__main__":
 
             goalbias = goalbias + 5
 
-        plotStatistics(time, nodes, samples, goalbiasList)
+        plotStatistics(np.transpose(time), np.transpose(nodes), np.transpose(samples), np.transpose(goalBL))
  
         ### END OF YOUR CODE ###
     waitrobot(robot)

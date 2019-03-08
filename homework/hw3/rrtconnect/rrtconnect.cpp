@@ -11,24 +11,37 @@
 #include <math.h>
 #include <random>
 #include <time.h>
+#include <chrono>
 
-#define DEFAULT_GOAL_BIAS 10
+#define DEFAULT_GOAL_BIAS       10
 #define L_END_EFFECTOR_LINK_IDX 49
+#define NUM_SMOOTHING_ITER      200
 
 using namespace OpenRAVE;
 
-const std::vector<float> noWristRollW = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0};
+const std::vector<double> noWristRollW = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0};
+
+const std::vector<double> operator+(const std::vector<double>& v1, 
+                                   const std::vector<double>& v2)
+{
+    std::vector<double> v3(v1.size(), 0.0);
+    for (unsigned i = 0; i < v1.size(); ++i)
+    {
+        v3[i] = v1[i] + v2[i];
+    }
+    return v3;
+}
 
 class RRTNode
 {
 private:
-    const std::vector<float> q;     // Configuration of robot represented by node
+    const std::vector<double> q;     // Configuration of robot represented by node
     RRTNode* parent;                // Parent node
 
 public:
-    RRTNode(const std::vector<float>& q) : q(q), parent(NULL) {};
+    RRTNode(const std::vector<double>& q) : q(q), parent(NULL) {};
 
-    RRTNode(const std::vector<float>& q, RRTNode* const p) : q(q), parent(p) {};
+    RRTNode(const std::vector<double>& q, RRTNode* const p) : q(q), parent(p) {};
     
     // Apprently defining a member function inside the class definition means
     // that the compiler will inline this. The other way is to explicitly use
@@ -37,18 +50,10 @@ public:
 
     RRTNode* getParent() const { return parent; }
 
-    const std::vector<float>& getConfig() const { return q; }
-
-    const std::vector<dReal> getdRealConfig() const;
+    const std::vector<double>& getConfig() const { return q; }
     
     bool isRoot() const { return parent == NULL; }
 };
-
-const std::vector<dReal> RRTNode::getdRealConfig() const
-{
-    std::vector<dReal> config(q.begin(), q.end());
-    return config;
-}
 
 class NodeTree
 {
@@ -58,7 +63,7 @@ private:
 public:
     NodeTree() {} ;
 
-    void clear() { nodes.clear(); }
+    void clear();
 
     NodeTree(RRTNode* node) { nodes.push_back(node); }
 
@@ -81,7 +86,7 @@ public:
     // -> root) but after looking at it further, I don't really need a reverse
     // container - just a reversed view of the container which can be achieved
     // with rbegin() and rend() reverse iterators
-    std::vector<RRTNode*> getPath(RRTNode* const node) const;
+    void getPath(RRTNode* const node) const;
 
     // Implements a nearest neighbor via linear search. The decision was made to
     // use a linear search as opposed to using a kd-tree as apparently the tree
@@ -93,22 +98,31 @@ public:
     // be at least one node in the list of nodes. So given a configuration q, a
     // valid node will always be returned i.e. you don't need to worry about the
     // tree being empty.
-    RRTNode* nearestNeighbor(const std::vector<float>& q) const;
+    RRTNode* nearestNeighbor(const std::vector<double>& q) const;
 
     RRTNode* nearestNeighbor(RRTNode* const node) const;
 
     size_t getSize() const { return nodes.size(); }
 
     // Calculates the euclidian distance between two configurations
-    float calcEuclidianDist(const std::vector<float>& q1,
-                            const std::vector<float>& q2) const;
+    double calcEuclidianDist(const std::vector<double>& q1,
+                            const std::vector<double>& q2) const;
 
     // Calculates the euclidian distance between configurations where each
     // dimension can be weighted differently
-    float calcEuclidianDist(const std::vector<float>& q1,
-                            const std::vector<float>& q2,
-                            const std::vector<float>& w) const;
+    double calcEuclidianDist(const std::vector<double>& q1,
+                            const std::vector<double>& q2,
+                            const std::vector<double>& w) const;
 };
+
+void NodeTree::clear()
+{
+    for (unsigned i = 0; i < nodes.size(); ++i)
+    {
+        delete nodes[i];
+    }
+    nodes.clear();
+}
 
 void NodeTree::del(RRTNode* const node) 
 {
@@ -116,18 +130,16 @@ void NodeTree::del(RRTNode* const node)
     nodes.erase(std::remove(nodes.begin(), nodes.end(), node), nodes.end());
 }
 
-std::vector<RRTNode*> NodeTree::getPath(RRTNode* const node) const
+void NodeTree::getPath(RRTNode* const node) const
 {    
     RRTNode* curr = node;
-    std::vector<RRTNode*> path;
+    path.clear();
     
     while (curr->getParent() != NULL)
     {
-        path.push_back(curr);
+        path.push_back(curr->getConfig());
         curr = curr->getParent();
     }
-
-    return path;
 }
 
 RRTNode* NodeTree::nearestNeighbor(RRTNode* const node) const
@@ -135,16 +147,16 @@ RRTNode* NodeTree::nearestNeighbor(RRTNode* const node) const
     return nearestNeighbor(node->getConfig());
 }
 
-RRTNode* NodeTree::nearestNeighbor(const std::vector<float>& q) const
+RRTNode* NodeTree::nearestNeighbor(const std::vector<double>& q) const
 {
     RRTNode* nearestNeighbor = nodes[0];
 
-    float minDist = calcEuclidianDist(q, nodes[0]->getConfig(), noWristRollW);
+    double minDist = calcEuclidianDist(q, nodes[0]->getConfig(), noWristRollW);
     
 
     for ( auto node : nodes )
     {
-        float dist = calcEuclidianDist(q, node->getConfig(), noWristRollW);
+        double dist = calcEuclidianDist(q, node->getConfig(), noWristRollW);
         if (dist < minDist)
         {
             minDist = dist;
@@ -154,20 +166,20 @@ RRTNode* NodeTree::nearestNeighbor(const std::vector<float>& q) const
     return nearestNeighbor;
 }
 
-float NodeTree::calcEuclidianDist(
-    const std::vector<float>& q1,
-    const std::vector<float>& q2) const
+double NodeTree::calcEuclidianDist(
+    const std::vector<double>& q1,
+    const std::vector<double>& q2) const
 {
-    std::vector<float> weights (q1.size(), 1.0);
+    std::vector<double> weights (q1.size(), 1.0);
     return calcEuclidianDist(q1, q2, weights);
 }
 
-float NodeTree::calcEuclidianDist(
-    const std::vector<float>& q1,
-    const std::vector<float>& q2,
-    const std::vector<float>& w) const
+double NodeTree::calcEuclidianDist(
+    const std::vector<double>& q1,
+    const std::vector<double>& q2,
+    const std::vector<double>& w) const
 {
-    float sum = 0.0;
+    double sum = 0.0;
     for (unsigned i = 0; i < q1.size(); i++)
     {
         sum += w[i]*(q1[i] - q2[i])*(q1[i] - q2[i]);
@@ -179,13 +191,13 @@ float NodeTree::calcEuclidianDist(
 class RRTConnect : public ModuleBase
 {
 private:
-    std::vector<float> goalQ;       // Goal configuration to reach
-    std::vector<float> startQ;      // Start (root) configuration
+    std::vector<double> goalQ;       // Goal configuration to reach
+    std::vector<double> startQ;      // Start (root) configuration
     NodeTree tree;
     RRTNode* goal;
 
     int numSamples;     // Number of samples to try before stopping
-    float stepSize;     // Length of step towards sampled config
+    double stepSize;     // Length of step towards sampled config
     int goalBias;       // Select goalQ every goalBias percent of time
     int gSamples;       // Number of time the goal has been sampled
 
@@ -193,10 +205,13 @@ private:
     std::vector<dReal> ulim;        // upper limits of active joints
 
     std::mt19937 gen;               // random number generator
-    std::vector<std::uniform_real_distribution<float> > dists;
+    std::vector<std::uniform_real_distribution<double> > dists;
 
     RobotBasePtr probot;            // Holds pointer to the PR2 robot in scene
     std::vector<GraphHandlePtr> ghandle;         // Handle to all of the points being plotted
+
+    std::vector<RRTNode*> path;
+    std::vector<std::vector<double> > smoothedPath;
 
 public:
 
@@ -227,15 +242,15 @@ private:
     template <class T>
     void printVector(std::string s, const std::vector<T>& v) const;
 
-    void sampleConfiguration(std::vector<float>& q);
+    void sampleConfiguration(std::vector<double>& q);
 
-    bool takeStepsToSample(RRTNode* node, const std::vector<float>& q);
-
-    bool stepToSample(RRTNode* node, 
-                      const std::vector<float>& sampleQ,
-                      std::vector<float>& newQ);
+    bool takeStepsToSample(RRTNode* node, const std::vector<double>& q);
 
     void plotTrajectory();
+
+    void executeTrajectory();
+
+    void smoothPath();
 
 };
  
@@ -271,6 +286,56 @@ RRTConnect::RRTConnect(EnvironmentBasePtr penv, std::istream& ss)
     gen.seed(rd());
 }
 
+void smoothPath()
+{
+    smoothedPath.clear();
+
+    for (unsigned i = 0; i < NUM_SMOOTHING_ITER; ++i)
+    {
+        // 1. Choose two nodes without repeating
+        int idx1 = 0, idx2 = 0;
+        
+        srand (time(NULL))
+        while (idx1 == idx2)
+        {
+            idx1 = rand() % path.size();
+            idx2 = rand() % path.size();
+
+            if (idx1 > idx2)
+            {
+                std::swap(idx1,idx2);
+            }
+        }
+        std::vector<dReal> n1 = path[idx1];
+        std::vector<dReal> n2 = path[idx2];
+
+        // 2. Walk from node 1 towards node 2 with stepSize
+        bool smoothing = true;
+        std::vector<dReal> shorterPath;
+
+        while (smoothing)
+        {
+            
+        }
+    }
+}
+
+void RRTConnect::executeTrajectory()
+{
+    TrajectoryBasePtr traj = RaveCreateTrajectory(GetEnv(), "");
+    traj->Init(probot->GetActiveConfigurationSpecification());
+
+    int i = 0;
+    std::vector<double> point;
+    for (auto rit = path.rbegin(); rit != path.rend(); ++rit)
+    {
+        point = (*rit)->getConfig();
+        traj->Insert(i, point);
+        i++;
+    }
+    probot->GetController()->SetPath(traj);
+}
+
 bool RRTConnect::resetTree(std::ostream& sout, std::istream& sinput)
 {
     tree.clear();
@@ -280,6 +345,7 @@ bool RRTConnect::resetTree(std::ostream& sout, std::istream& sinput)
     tree.add(root);
 
     gSamples = 0;
+    return true;
 }
 
 template <class T>
@@ -354,7 +420,7 @@ bool RRTConnect::Init(std::ostream& sout, std::istream& sinput)
 
     for (unsigned i = 0; i < llim.size(); ++i)
     {
-        std::uniform_real_distribution<float> dis(llim[i], ulim[i]);
+        std::uniform_real_distribution<double> dis(llim[i], ulim[i]);
         dists.push_back(dis);
     }
 
@@ -399,7 +465,7 @@ bool RRTConnect::printClass(std::ostream& sout, std::istream& sinput)
     return true;
 }
 
-void RRTConnect::sampleConfiguration(std::vector<float>& q)
+void RRTConnect::sampleConfiguration(std::vector<double>& q)
 {
     if ((rand()%100)+1 <= goalBias)
     {
@@ -409,27 +475,21 @@ void RRTConnect::sampleConfiguration(std::vector<float>& q)
     }
     else
     {
-        std::vector<dReal> config;
         while (true)
         {
             // Generate random sample config
-            for (auto & udist : dists)
+            for (unsigned i = 0; i < q.size(); ++i)
             {
-                config.push_back(udist(gen));
+                q[i] = dists[i](gen);
             }
 
             // Check for collision
-            probot->SetActiveDOFValues(config);
+            probot->SetActiveDOFValues(q);
             if (!(GetEnv()->CheckCollision(RobotBaseConstPtr(probot)) || 
                 probot->CheckSelfCollision()))
             {
-                for (unsigned i = 0; i < config.size(); ++i)
-                {
-                    q[i] = config[i];
-                }
                 break;
             }
-            config.clear();
         }
         // printVector("Processing sample:", q);
     }
@@ -448,7 +508,7 @@ bool RRTConnect::run(std::ostream& sout, std::istream& sinput)
                       << "Nodes: " << tree.getSize() <<  std::endl;
         }
 
-        std::vector<float> sampleQ(startQ.size(), 0.0);
+        std::vector<double> sampleQ(startQ.size(), 0.0);
         sampleConfiguration(sampleQ);
         RRTNode* nearestNode = tree.nearestNeighbor(sampleQ);
         
@@ -489,63 +549,66 @@ bool RRTConnect::run(std::ostream& sout, std::istream& sinput)
         i++;
     }
 
-    // Plot all of the points on the way to the goal config
+    tree.getPath(goal);
     plotTrajectory();
+    executeTrajectory();
 
     return true;
 }
 
-bool RRTConnect::takeStepsToSample(RRTNode* nearestNode, const std::vector<float>& sampleQ)
+bool RRTConnect::takeStepsToSample(RRTNode* nn, const std::vector<double>& sample)
 {
-    std::vector<float> newQ(startQ.size(), 0.0);
-    RRTNode* currNode = nearestNode;
-    while (stepToSample(currNode, sampleQ, newQ))
-    {
-        RRTNode* newNode = new RRTNode(newQ, currNode);
-        tree.add(newNode);
-        currNode = newNode;
+    std::vector<double> new_q(sample.size(), 0.0);
 
-        if (sampleQ == newQ)
+    // Calculate unit step direction vector
+    std::vector<double> dir (sample.size(), 0.0);
+    double dist = tree.calcEuclidianDist(
+        nn->getConfig(), sample, noWristRollW);
+    
+    for (unsigned i = 0; i < sample.size(); ++i)
+    {
+        dir[i] = sample[i]-(nn->getConfig()[i]);
+        dir[i] = dir[i] / dist * stepSize;
+    }
+
+    RRTNode* currNode = nn;
+    while (true)
+    {
+        // Check if distance between sample and current node is small
+        dist = tree.calcEuclidianDist(
+            currNode->getConfig(), sample, noWristRollW);
+        if (dist <= stepSize)
         {
-            if (newQ == goalQ)
+            new_q = sample;
+        }
+        else
+        {
+            new_q = currNode->getConfig() + dir; 
+        }
+
+        // Check potential node
+        probot->SetActiveDOFValues(new_q);
+        if (!(GetEnv()->CheckCollision(RobotBaseConstPtr(probot))) && 
+            !(probot->CheckSelfCollision()))
+        {
+            RRTNode* newNode = new RRTNode(new_q, currNode);
+            tree.add(newNode);
+            currNode = newNode;
+
+            if (sample == new_q)
             {
-                goal = newNode;
+                if (new_q == goalQ)
+                {   
+                    goal = newNode;
+                }
+                return true;
             }
-            return true;
         }
-    }
-    return false;
-}
-
-bool RRTConnect::stepToSample(RRTNode* node,
-    const std::vector<float>& sampleQ,
-    std::vector<float>& newQ)
-{
-    float dist = tree.calcEuclidianDist(node->getConfig(), sampleQ, noWristRollW);
-    // std::cout << "Euclid dist: " << dist << std::endl;
-    if (dist <= stepSize)
-    {
-        newQ = sampleQ;
-    }
-    else
-    {
-        // Calculate step vector direction and normalize to a certain unit
-        // Apply step vector to the nearest neighbor node
-        std::vector<float> stepVector (sampleQ.size(), 0.0);
-        for (unsigned i = 0; i < sampleQ.size(); ++i)
+        else
         {
-            stepVector[i] = sampleQ[i]-node->getConfig()[i];
-            stepVector[i] = stepVector[i] / dist * stepSize;
-            newQ[i] = node->getConfig()[i] + stepVector[i];
-        }
+            return false;
+        }   
     }
-    std::vector<dReal> vals(newQ.begin(), newQ.end());
-    probot->SetActiveDOFValues(vals);
-
-    // Return true if it is valid and save config to newQ
-    // Return false otherwise
-    return !(GetEnv()->CheckCollision(RobotBaseConstPtr(probot)) || 
-            probot->CheckSelfCollision());
 }
 
 void RRTConnect::plotTrajectory() 
@@ -561,7 +624,7 @@ void RRTConnect::plotTrajectory()
     float red[4] = {1,0,0,1};
     for (auto rit = path.rbegin(); rit != path.rend(); ++rit)
     {
-        probot->SetActiveDOFValues((*rit)->getdRealConfig());
+        probot->SetActiveDOFValues((*rit)->getConfig());
         // Get the position of the end effector
         Transform endEffector = probot->GetLinks()[L_END_EFFECTOR_LINK_IDX]->GetTransform();
         p[0] = endEffector.trans.x;

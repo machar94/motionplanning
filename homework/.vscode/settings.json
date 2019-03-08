@@ -43,5 +43,6 @@
         "typeindex": "cpp",
         "typeinfo": "cpp",
         "utility": "cpp"
-    }
+    },
+    "python.pythonPath": "/usr/bin/python"
 }
