@@ -6,6 +6,8 @@ import openravepy
 
 #### YOUR IMPORTS GO HERE ####
 import IPython
+import numpy as np
+import matplotlib.pyplot as plt
 #### END OF YOUR IMPORTS ####
 
 if not __openravepy_build_doc__:
@@ -24,6 +26,13 @@ def tuckarms(env,robot):
         robot.SetActiveDOFValues([1.29023451,-2.32099996,-0.69800004,1.27843491,-2.32100002,-0.69799996])        
         robot.GetController().SetDesired(robot.GetDOFValues())
     waitrobot(robot)
+
+def plotStatistics(time, nodes, samples):
+    print "\n\n===== Summary of Simulations ====="
+    print "Average Time    : %f" % (np.average(time))
+    print "Average Samples : %f" % (np.average(samples))
+    print "Average Nodes   : %f" % (np.average(nodes))
+    
 
 if __name__ == "__main__":
 
@@ -59,13 +68,16 @@ if __name__ == "__main__":
     waitrobot(robot)
 
     with env:
-        # goalconfig = [0.449,-0.201,-0.151,0,0,-0.11,0]
-        goalconfig = [0.5255,1.29,-2.12,0,0,-1.38,0]
-        
+        goalconfig = [0.449,-0.201,-0.151,0,0,-0.11,0]    # Actual goal
+        # goalconfig = [0.5255,1.29,-2.12,0,0,-1.38,0]      # level 4 goal
+        # goalconfig = [0.5255,1.29,-2.12,0,0,-0.11,0]      # level 3 goal
+        # goalconfig = [-0.15,1.29,-2.12,0,0,-1.38,0]       # level 2 goal
+        # goalconfig = [-0.15,-0.35,-1.73,0,0,-0.11,0]      # level 1 goal
+
         ### YOUR CODE HERE ###
         NUM_SAMPLES = 10000
-        GOAL_BIAS_VAL = 10     # int value between (0, 100]
-        STEP_SIZE = 0.3
+        GOAL_BIAS_VAL = 30     # int value between (0, 100]
+        STEP_SIZE = 0.2
 
         # Register the start configuration
         startConfigStr = ' '.join([str(e) for e in startconfig])
@@ -86,9 +98,21 @@ if __name__ == "__main__":
 
         RRTConnect.SendCommand('init')
         # RRTConnect.SendCommand('printclass')
-        # RRTConnect.SendCommand('run')
-        t = robot.GetTransform()
-        IPython.embed()
+
+        time    = np.empty(shape=[0,1])
+        samples = np.empty(shape=[0,1])
+        nodes   = np.empty(shape=[0,1])
+
+        for i in xrange(0,1):
+            result = RRTConnect.SendCommand('run')
+            RRTConnect.SendCommand('resettree')
+
+            data = [int(val) for val in result.split()]
+            time = np.append(time, [[data[0]]], axis=0)
+            nodes = np.append(nodes, [[data[1]]], axis=0)
+            samples = np.append(samples, [[data[2]]], axis=0)
+
+        plotStatistics(time, nodes, samples)
  
         ### END OF YOUR CODE ###
     waitrobot(robot)

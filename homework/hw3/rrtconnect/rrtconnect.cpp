@@ -12,8 +12,12 @@
 #include <random>
 #include <time.h>
 
+#define DEFAULT_GOAL_BIAS 10
+#define L_END_EFFECTOR_LINK_IDX 49
+
 using namespace OpenRAVE;
 
+const std::vector<float> noWristRollW = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0};
 
 class RRTNode
 {
@@ -35,12 +39,12 @@ public:
 
     const std::vector<float>& getConfig() const { return q; }
 
-    const std::vector<dReal> getConfig() const;
+    const std::vector<dReal> getdRealConfig() const;
     
     bool isRoot() const { return parent == NULL; }
 };
 
-const std::vector<dReal> RRTNode::getConfig() const
+const std::vector<dReal> RRTNode::getdRealConfig() const
 {
     std::vector<dReal> config(q.begin(), q.end());
     return config;
@@ -53,6 +57,8 @@ private:
 
 public:
     NodeTree() {} ;
+
+    void clear() { nodes.clear(); }
 
     NodeTree(RRTNode* node) { nodes.push_back(node); }
 
@@ -132,12 +138,13 @@ RRTNode* NodeTree::nearestNeighbor(RRTNode* const node) const
 RRTNode* NodeTree::nearestNeighbor(const std::vector<float>& q) const
 {
     RRTNode* nearestNeighbor = nodes[0];
-    float minDist = calcEuclidianDist(q, nodes[0]->getConfig());
+
+    float minDist = calcEuclidianDist(q, nodes[0]->getConfig(), noWristRollW);
     
 
     for ( auto node : nodes )
     {
-        float dist = calcEuclidianDist(q, node->getConfig());
+        float dist = calcEuclidianDist(q, node->getConfig(), noWristRollW);
         if (dist < minDist)
         {
             minDist = dist;
@@ -180,6 +187,7 @@ private:
     int numSamples;     // Number of samples to try before stopping
     float stepSize;     // Length of step towards sampled config
     int goalBias;       // Select goalQ every goalBias percent of time
+    int gSamples;       // Number of time the goal has been sampled
 
     std::vector<dReal> llim;        // lower limits of active joints
     std::vector<dReal> ulim;        // upper limits of active joints
@@ -188,7 +196,7 @@ private:
     std::vector<std::uniform_real_distribution<float> > dists;
 
     RobotBasePtr probot;            // Holds pointer to the PR2 robot in scene
-    GraphHandlePtr ghandle;         // Handle to all of the points being plotted
+    std::vector<GraphHandlePtr> ghandle;         // Handle to all of the points being plotted
 
 public:
 
@@ -212,6 +220,8 @@ public:
 
     bool run(std::ostream& sout, std::istream& sinput);
 
+    bool resetTree(std::ostream& sout, std::istream& sinput);
+
 private:
 
     template <class T>
@@ -225,7 +235,7 @@ private:
                       const std::vector<float>& sampleQ,
                       std::vector<float>& newQ);
 
-    void plotTrajectory() const;
+    void plotTrajectory();
 
 };
  
@@ -235,7 +245,8 @@ RRTConnect::RRTConnect(EnvironmentBasePtr penv, std::istream& ss)
     , goal(NULL)
     , numSamples(0)
     , stepSize(0.0)
-    , goalBias(10)
+    , goalBias(DEFAULT_GOAL_BIAS)
+    , gSamples(0)
 {
     RegisterCommand("SetGoal",boost::bind(&RRTConnect::SetGoal,this,_1,_2),
                     "Sets the goal config for motion planner");
@@ -253,8 +264,22 @@ RRTConnect::RRTConnect(EnvironmentBasePtr penv, std::istream& ss)
                     "All prep work needed done here before calling run");
     RegisterCommand("run",boost::bind(&RRTConnect::run,this,_1,_2),
                     "Run RRT Connect algorithm");
+    RegisterCommand("resetTree",boost::bind(&RRTConnect::resetTree,this,_1,_2),
+                    "Clears all the nodes in the NodeTree except start");
+
     std::random_device rd;
     gen.seed(rd());
+}
+
+bool RRTConnect::resetTree(std::ostream& sout, std::istream& sinput)
+{
+    tree.clear();
+    goal = NULL;
+
+    RRTNode* root = new RRTNode(startQ);
+    tree.add(root);
+
+    gSamples = 0;
 }
 
 template <class T>
@@ -376,9 +401,10 @@ bool RRTConnect::printClass(std::ostream& sout, std::istream& sinput)
 
 void RRTConnect::sampleConfiguration(std::vector<float>& q)
 {
-    if ((rand()%100)+1 > goalBias)
+    if ((rand()%100)+1 <= goalBias)
     {
         q = goalQ;
+        gSamples++;
         // printVector("Processing goal:", q);
     }
     else
@@ -434,11 +460,17 @@ bool RRTConnect::run(std::ostream& sout, std::istream& sinput)
             // std::cout << "Reached Sample | Added " << nafter - nbefore << std::endl;
             if (sampleQ == goalQ)
             {
+                endTime = time(NULL);
                 std::cout << "Goal configuration reached!\n";
-                std::cout << "Start Time  : " << startTime << std::endl;
-                std::cout << "End Time    : " << endTime << std::endl;
+                std::cout << "Time        : " << endTime - startTime << std::endl;
                 std::cout << "Total Nodes : " << tree.getSize() << std::endl;
                 std::cout << "Samples     : " << i << std::endl;
+                std::cout << "Goal Samples: " << gSamples << std::endl;
+
+                sout << endTime - startTime << " ";
+                sout << tree.getSize() << " ";
+                sout << i << " ";
+                
                 break;
             }
         }
@@ -489,7 +521,7 @@ bool RRTConnect::stepToSample(RRTNode* node,
     const std::vector<float>& sampleQ,
     std::vector<float>& newQ)
 {
-    float dist = tree.calcEuclidianDist(node->getConfig(), sampleQ);
+    float dist = tree.calcEuclidianDist(node->getConfig(), sampleQ, noWristRollW);
     // std::cout << "Euclid dist: " << dist << std::endl;
     if (dist <= stepSize)
     {
@@ -516,22 +548,25 @@ bool RRTConnect::stepToSample(RRTNode* node,
             probot->CheckSelfCollision());
 }
 
-viod RRTConnect::plotTrajectory() const
+void RRTConnect::plotTrajectory() 
 {
+    // Clear any existing points in environment
+    ghandle.clear();
+
     // Get path of nodes
-    std::vector<RRTNode*> path = tree.getPath();
+    std::vector<RRTNode*> path = tree.getPath(goal);
 
     // Set robot to that configuration
     std::vector<float> p(3,0.0);
     float red[4] = {1,0,0,1};
-    for (auto n : path)
+    for (auto rit = path.rbegin(); rit != path.rend(); ++rit)
     {
-        probot->SetActiveDOFValues(n->getConfig());
+        probot->SetActiveDOFValues((*rit)->getdRealConfig());
         // Get the position of the end effector
-        Transform endEffector = probot->GetLinks()[49]->GetTransform();
+        Transform endEffector = probot->GetLinks()[L_END_EFFECTOR_LINK_IDX]->GetTransform();
         p[0] = endEffector.trans.x;
         p[1] = endEffector.trans.y;
         p[2] = endEffector.trans.z;
-        ghandle.push_back(GetEnv()->plot3(&p[0],1,16,3,red,1)
+        ghandle.push_back(GetEnv()->plot3(&p[0],1,12,5,red,0));
     }
 }
