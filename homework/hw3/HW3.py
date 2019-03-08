@@ -27,11 +27,20 @@ def tuckarms(env,robot):
         robot.GetController().SetDesired(robot.GetDOFValues())
     waitrobot(robot)
 
-def plotStatistics(time, nodes, samples):
+def plotStatistics(time, nodes, samples, goalbias):
     print "\n\n===== Summary of Simulations ====="
-    print "Average Time    : %f" % (np.average(time))
-    print "Average Samples : %f" % (np.average(samples))
-    print "Average Nodes   : %f" % (np.average(nodes))
+    #print "Average Time    : %f" % (np.average(time))
+    #print "Average Samples : %f" % (np.average(samples))
+    #print "Average Nodes   : %f" % (np.average(nodes))
+
+    plt.rcParams.update({'font.size': 22})
+
+    f_handle = file('goalBias.txt', 'a')
+    np.save(f_handle, goalbias)
+    np.save(f_handle, time)
+    np.save(f_handle, nodes)
+    np.save(f_handle, samples)
+    f_handle.close()
     
 
 if __name__ == "__main__":
@@ -68,9 +77,9 @@ if __name__ == "__main__":
     waitrobot(robot)
 
     with env:
-        goalconfig = [0.449,-0.201,-0.151,0,0,-0.11,0]    # Actual goal
+        # goalconfig = [0.449,-0.201,-0.151,0,0,-0.11,0]    # Actual goal
         # goalconfig = [0.5255,1.29,-2.12,0,0,-1.38,0]      # level 4 goal
-        # goalconfig = [0.5255,1.29,-2.12,0,0,-0.11,0]      # level 3 goal
+        goalconfig = [0.5255,1.29,-2.12,0,0,-0.11,0]      # level 3 goal
         # goalconfig = [-0.15,1.29,-2.12,0,0,-1.38,0]       # level 2 goal
         # goalconfig = [-0.15,-0.35,-1.73,0,0,-0.11,0]      # level 1 goal
 
@@ -102,17 +111,23 @@ if __name__ == "__main__":
         time    = np.empty(shape=[0,1])
         samples = np.empty(shape=[0,1])
         nodes   = np.empty(shape=[0,1])
+        goalBL  = np.empty(shape=[0,1])
 
-        for i in xrange(0,1):
-            result = RRTConnect.SendCommand('run')
+        goalbias = 1;
+        while goalbias < 100:
             RRTConnect.SendCommand('resettree')
+            RRTConnect.SendCommand('setgoal ' + str(goalbias))
+            result = RRTConnect.SendCommand('run')
 
             data = [int(val) for val in result.split()]
             time = np.append(time, [[data[0]]], axis=0)
             nodes = np.append(nodes, [[data[1]]], axis=0)
             samples = np.append(samples, [[data[2]]], axis=0)
+            goalBL = np.append(goalBL, [[goalbias]], axis=0)
 
-        plotStatistics(time, nodes, samples)
+            goalbias = goalbias + 5
+
+        plotStatistics(time, nodes, samples, goalbiasList)
  
         ### END OF YOUR CODE ###
     waitrobot(robot)
