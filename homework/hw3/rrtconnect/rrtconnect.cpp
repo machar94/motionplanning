@@ -19,7 +19,23 @@
 
 using namespace OpenRAVE;
 
-const std::vector<double> noWristRollW = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0};
+static std::vector<double> noWristRollW = {5.0, 4.0, 3.0, 2.0, 1.0, 0.5, 0.0};
+static const float red[4] = {1,0,0,1};
+static const float blue[4] = {0,0,1,1};
+
+void normalizeWeights()
+{
+    double sum = 0.0;
+    for (const auto & val : noWristRollW)
+    {
+        sum += val;
+    }
+    for (auto & val : noWristRollW)
+    {
+        val /= sum;
+    }
+}
+
 
 const std::vector<double> operator+(const std::vector<double>& v1, 
                                    const std::vector<double>& v2)
@@ -86,7 +102,7 @@ public:
     // -> root) but after looking at it further, I don't really need a reverse
     // container - just a reversed view of the container which can be achieved
     // with rbegin() and rend() reverse iterators
-    void getPath(RRTNode* const node) const;
+    std::vector<std::vector<dReal> > getPath(RRTNode* const node);
 
     // Implements a nearest neighbor via linear search. The decision was made to
     // use a linear search as opposed to using a kd-tree as apparently the tree
@@ -130,16 +146,20 @@ void NodeTree::del(RRTNode* const node)
     nodes.erase(std::remove(nodes.begin(), nodes.end(), node), nodes.end());
 }
 
-void NodeTree::getPath(RRTNode* const node) const
+std::vector<std::vector<dReal>> NodeTree::getPath(RRTNode* const node)
 {    
     RRTNode* curr = node;
-    path.clear();
+    std::vector<std::vector<dReal> > path;
     
     while (curr->getParent() != NULL)
     {
         path.push_back(curr->getConfig());
         curr = curr->getParent();
     }
+
+    // Finall add start config to path
+    path.push_back(curr->getConfig());
+    return path;
 }
 
 RRTNode* NodeTree::nearestNeighbor(RRTNode* const node) const
@@ -179,6 +199,7 @@ double NodeTree::calcEuclidianDist(
     const std::vector<double>& q2,
     const std::vector<double>& w) const
 {
+
     double sum = 0.0;
     for (unsigned i = 0; i < q1.size(); i++)
     {
@@ -210,9 +231,8 @@ private:
     RobotBasePtr probot;            // Holds pointer to the PR2 robot in scene
     std::vector<GraphHandlePtr> ghandle;         // Handle to all of the points being plotted
 
-    std::vector<RRTNode*> path;
+    std::vector<std::vector<double> > path;
     std::vector<std::vector<double> > smoothedPath;
-
 public:
 
     RRTConnect(EnvironmentBasePtr penv, std::istream& ss);
@@ -246,11 +266,16 @@ private:
 
     bool takeStepsToSample(RRTNode* node, const std::vector<double>& q);
 
-    void plotTrajectory();
+    void plotTrajectory(const float color[4], std::vector<std::vector<double> >& path);
 
     void executeTrajectory();
 
     void smoothPath();
+
+    std::vector<dReal> calcDirVector(std::vector<dReal> v1, 
+                                     std::vector<dReal> v2);
+
+    double pathLength(std::vector<std::vector<double> > & path);
 
 };
  
@@ -282,46 +307,97 @@ RRTConnect::RRTConnect(EnvironmentBasePtr penv, std::istream& ss)
     RegisterCommand("resetTree",boost::bind(&RRTConnect::resetTree,this,_1,_2),
                     "Clears all the nodes in the NodeTree except start");
 
+    normalizeWeights();
+    printVector("Normalized W:", noWristRollW);
+
     std::random_device rd;
-    gen.seed(rd());
+    srand(0);
+    gen.seed(0);
 }
 
-void smoothPath()
+std::vector<dReal> RRTConnect::calcDirVector(
+    std::vector<dReal> v1, 
+    std::vector<dReal> v2)
+{
+    std::vector<dReal> dir (v2.size(), 0.0);
+    double dist = tree.calcEuclidianDist(v1, v2, noWristRollW);
+    
+    for (unsigned i = 0; i < v2.size(); ++i)
+    {
+        dir[i] = (v2[i]-v1[i]) / dist * stepSize;
+    }
+    return dir;
+}
+
+void RRTConnect::smoothPath()
 {
     smoothedPath.clear();
+    smoothedPath.insert(smoothedPath.begin(), path.begin(), path.end());
 
     for (unsigned i = 0; i < NUM_SMOOTHING_ITER; ++i)
     {
         // 1. Choose two nodes without repeating
         int idx1 = 0, idx2 = 0;
-        
-        srand (time(NULL))
-        while (idx1 == idx2)
+
+        // Desire:
+        // 1. Nodes selected should not be the same
+        // 2. Nodes selected should not be right next to each other
+        while ((idx1 == idx2) || std::abs(idx2-idx1) == 1)
         {
-            idx1 = rand() % path.size();
-            idx2 = rand() % path.size();
+            idx1 = rand() % smoothedPath.size();
+            idx2 = rand() % smoothedPath.size();
 
             if (idx1 > idx2)
             {
                 std::swap(idx1,idx2);
             }
         }
-        std::vector<dReal> n1 = path[idx1];
-        std::vector<dReal> n2 = path[idx2];
+        std::vector<dReal> n1 = smoothedPath[idx1];
+        std::vector<dReal> n2 = smoothedPath[idx2];
 
         // 2. Walk from node 1 towards node 2 with stepSize
         bool smoothing = true;
-        std::vector<dReal> shorterPath;
-
+        std::vector<std::vector<dReal> > shorterPath;
+        std::vector<dReal> vec = calcDirVector(n1, n2);
+        
         while (smoothing)
         {
-            
+            // Take a step forward to node 2
+            n1 = n1 + vec;
+
+            // Check that position is valid
+            probot->SetActiveDOFValues(n1);
+            if (GetEnv()->CheckCollision(probot) || 
+                probot->CheckSelfCollision())
+            {
+                shorterPath.clear();
+                break;
+            }
+            else
+            {
+                shorterPath.push_back(n1);
+            }
+
+            // If sufficiently close to node 2 stop
+            double dist = tree.calcEuclidianDist(n1,n2);
+            if (dist <= stepSize)
+            {
+                break;
+            }
+        }
+
+        if (shorterPath.size() > 0)
+        {
+            smoothedPath.erase(smoothedPath.begin()+idx1+1, smoothedPath.begin()+idx2);
+            smoothedPath.insert(smoothedPath.begin()+idx1+1, shorterPath.begin(), shorterPath.end());
         }
     }
 }
 
 void RRTConnect::executeTrajectory()
 {
+    probot->SetActiveDOFValues(startQ);
+
     TrajectoryBasePtr traj = RaveCreateTrajectory(GetEnv(), "");
     traj->Init(probot->GetActiveConfigurationSpecification());
 
@@ -329,8 +405,7 @@ void RRTConnect::executeTrajectory()
     std::vector<double> point;
     for (auto rit = path.rbegin(); rit != path.rend(); ++rit)
     {
-        point = (*rit)->getConfig();
-        traj->Insert(i, point);
+        traj->Insert(i, *rit);
         i++;
     }
     probot->GetController()->SetPath(traj);
@@ -345,6 +420,10 @@ bool RRTConnect::resetTree(std::ostream& sout, std::istream& sinput)
     tree.add(root);
 
     gSamples = 0;
+    
+    // Clear any existing points in environment
+    ghandle.clear();
+
     return true;
 }
 
@@ -383,6 +462,7 @@ OPENRAVE_PLUGIN_API void DestroyPlugin()
 bool RRTConnect::SetStart(std::ostream& sout, std::istream& sinput)
 {
     std::string sval;
+    startQ.clear();
     while (sinput >> sval)
     {
         startQ.push_back(atof(sval.c_str()));
@@ -396,6 +476,7 @@ bool RRTConnect::SetStart(std::ostream& sout, std::istream& sinput)
 bool RRTConnect::SetGoal(std::ostream& sout, std::istream& sinput)
 {
     std::string sval;
+    goalQ.clear();
     while (sinput >> sval)
     {
         goalQ.push_back(atof(sval.c_str()));
@@ -513,10 +594,10 @@ bool RRTConnect::run(std::ostream& sout, std::istream& sinput)
         RRTNode* nearestNode = tree.nearestNeighbor(sampleQ);
         
         // sampleQ has been reached successfully if it returns true
-        int nbefore = tree.getSize();
+        // int nbefore = tree.getSize();
         if(takeStepsToSample(nearestNode, sampleQ))
         {
-            int nafter = tree.getSize();
+            // int nafter = tree.getSize();
             // std::cout << "Reached Sample | Added " << nafter - nbefore << std::endl;
             if (sampleQ == goalQ)
             {
@@ -536,7 +617,7 @@ bool RRTConnect::run(std::ostream& sout, std::istream& sinput)
         }
 
         endTime = time(NULL);
-        if ((endTime - startTime) > 600) // Take no longer than 5 minutes
+        if ((endTime - startTime) > 3600)
         {
             std::cout << "==== Sorry Timed Out ===" << std::endl;
             std::cout << "Start Time  : " << startTime << std::endl;
@@ -549,9 +630,29 @@ bool RRTConnect::run(std::ostream& sout, std::istream& sinput)
         i++;
     }
 
-    tree.getPath(goal);
-    plotTrajectory();
+    path = tree.getPath(goal);
+    plotTrajectory(red, path);
+
+    double pathDist = pathLength(path);
+    std::cout << "\nPath Length : " << pathDist << std::endl;
+    std::cout << "Path Nodes  : " << path.size() << std::endl;
+    
+    // Time path smoothing
+    startTime = time(NULL);
+    smoothPath();
+    endTime = time(NULL);
+    std::cout << "\nSmooth Time : " << endTime - startTime << std::endl;
+    
+    plotTrajectory(blue, smoothedPath);
     executeTrajectory();
+    
+    pathDist = pathLength(path);
+    double smoothedPathDist = pathLength(smoothedPath);
+
+    std::cout << "\nPath Length : " << pathDist << std::endl;
+    std::cout << "Path Nodes  : " << path.size() << std::endl;
+    std::cout << "Smoothed Len: " << smoothedPathDist << std::endl;
+    std::cout << "Smoothed Nod: " << smoothedPath.size() << std::endl;
 
     return true;
 }
@@ -561,21 +662,13 @@ bool RRTConnect::takeStepsToSample(RRTNode* nn, const std::vector<double>& sampl
     std::vector<double> new_q(sample.size(), 0.0);
 
     // Calculate unit step direction vector
-    std::vector<double> dir (sample.size(), 0.0);
-    double dist = tree.calcEuclidianDist(
-        nn->getConfig(), sample, noWristRollW);
-    
-    for (unsigned i = 0; i < sample.size(); ++i)
-    {
-        dir[i] = sample[i]-(nn->getConfig()[i]);
-        dir[i] = dir[i] / dist * stepSize;
-    }
+    std::vector<double> vec = calcDirVector(nn->getConfig(), sample);
 
     RRTNode* currNode = nn;
     while (true)
     {
         // Check if distance between sample and current node is small
-        dist = tree.calcEuclidianDist(
+        double dist = tree.calcEuclidianDist(
             currNode->getConfig(), sample, noWristRollW);
         if (dist <= stepSize)
         {
@@ -583,7 +676,7 @@ bool RRTConnect::takeStepsToSample(RRTNode* nn, const std::vector<double>& sampl
         }
         else
         {
-            new_q = currNode->getConfig() + dir; 
+            new_q = currNode->getConfig() + vec; 
         }
 
         // Check potential node
@@ -611,25 +704,32 @@ bool RRTConnect::takeStepsToSample(RRTNode* nn, const std::vector<double>& sampl
     }
 }
 
-void RRTConnect::plotTrajectory() 
+void RRTConnect::plotTrajectory(const float color[4], std::vector<std::vector<double> >& path) 
 {
-    // Clear any existing points in environment
-    ghandle.clear();
-
-    // Get path of nodes
-    std::vector<RRTNode*> path = tree.getPath(goal);
-
     // Set robot to that configuration
     std::vector<float> p(3,0.0);
-    float red[4] = {1,0,0,1};
+
     for (auto rit = path.rbegin(); rit != path.rend(); ++rit)
     {
-        probot->SetActiveDOFValues((*rit)->getConfig());
+        probot->SetActiveDOFValues(*rit);
         // Get the position of the end effector
         Transform endEffector = probot->GetLinks()[L_END_EFFECTOR_LINK_IDX]->GetTransform();
         p[0] = endEffector.trans.x;
         p[1] = endEffector.trans.y;
         p[2] = endEffector.trans.z;
-        ghandle.push_back(GetEnv()->plot3(&p[0],1,12,5,red,0));
+        ghandle.push_back(GetEnv()->plot3(&p[0],1,12,5,color,0));
     }
+}
+
+double RRTConnect::pathLength(std::vector<std::vector<double> >& path)
+{
+    // There should be at least two elements in the path
+    assert(path.size() > 1);
+
+    double dist = 0.0;
+    for (unsigned i = 0; i < path.size()-1; ++i)
+    {
+        dist += tree.calcEuclidianDist(path[i],path[i+1]);
+    }
+    return dist;    
 }

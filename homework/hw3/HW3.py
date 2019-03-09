@@ -30,9 +30,9 @@ def tuckarms(env,robot):
 
 def plotStatistics(time, nodes, samples, goalbias):
     print "\n\n===== Summary of Simulations ====="
-    #print "Average Time    : %f" % (np.average(time))
-    #print "Average Samples : %f" % (np.average(samples))
-    #print "Average Nodes   : %f" % (np.average(nodes))
+    print "Average Time    : %f" % (np.average(time))
+    print "Average Samples : %f" % (np.average(samples))
+    print "Average Nodes   : %f" % (np.average(nodes))
 
     FILENAME = 'goalBias.txt'
 
@@ -123,19 +123,51 @@ if __name__ == "__main__":
         nodes   = np.empty(shape=[0,1])
         goalBL  = np.empty(shape=[0,1])
 
-        goalbias = 1;
-        while goalbias < 2:
-            RRTConnect.SendCommand('resettree')
-            RRTConnect.SendCommand('setgoal ' + str(GOAL_BIAS_VAL))
-            result = RRTConnect.SendCommand('run')
+        ###############################
+        # Test for various single test
+        ###############################
+        RRTConnect.SendCommand('resettree')
+        RRTConnect.SendCommand('setgoalbias ' + str(GOAL_BIAS_VAL))
+        result = RRTConnect.SendCommand('run')
 
-            data = [int(val) for val in result.split()]
-            time = np.append(time, [[data[0]]], axis=0)
-            nodes = np.append(nodes, [[data[1]]], axis=0)
-            samples = np.append(samples, [[data[2]]], axis=0)
-            goalBL = np.append(goalBL, [[goalbias]], axis=0)
+        data = [int(val) for val in result.split()]
+        time = np.append(time, [[data[0]]], axis=0)
+        nodes = np.append(nodes, [[data[1]]], axis=0)
+        samples = np.append(samples, [[data[2]]], axis=0)
+        goalBL = np.append(goalBL, [[GOAL_BIAS_VAL]], axis=0)
 
-            goalbias = goalbias + 5
+        ###############################
+        # Test for various single test
+        ###############################
+        # numLoops = 10;
+        # for i in xrange(0,numLoops):
+        #     RRTConnect.SendCommand('resettree')
+        #     RRTConnect.SendCommand('setgoalbias ' + str(GOAL_BIAS_VAL))
+        #     result = RRTConnect.SendCommand('run')
+
+        #     data = [int(val) for val in result.split()]
+        #     time = np.append(time, [[data[0]]], axis=0)
+        #     nodes = np.append(nodes, [[data[1]]], axis=0)
+        #     samples = np.append(samples, [[data[2]]], axis=0)
+        #     goalBL = np.append(goalBL, [[GOAL_BIAS_VAL]], axis=0)
+
+        ###############################
+        # Test for various goal biasing
+        ###############################
+
+        # goalbias = 1;
+        # while goalbias < 100:
+        #     RRTConnect.SendCommand('resettree')
+        #     RRTConnect.SendCommand('setgoal ' + str(goalbias))
+        #     result = RRTConnect.SendCommand('run')
+
+        #     data = [int(val) for val in result.split()]
+        #     time = np.append(time, [[data[0]]], axis=0)
+        #     nodes = np.append(nodes, [[data[1]]], axis=0)
+        #     samples = np.append(samples, [[data[2]]], axis=0)
+        #     goalBL = np.append(goalBL, [[goalbias]], axis=0)
+
+        #     goalbias = goalbias + 5
 
         plotStatistics(np.transpose(time), np.transpose(nodes), np.transpose(samples), np.transpose(goalBL))
  
