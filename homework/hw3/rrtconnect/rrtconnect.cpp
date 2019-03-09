@@ -311,8 +311,13 @@ RRTConnect::RRTConnect(EnvironmentBasePtr penv, std::istream& ss)
     printVector("Normalized W:", noWristRollW);
 
     std::random_device rd;
-    srand(0);
-    gen.seed(0);
+    
+    // For testing so seed generated is the same
+    // srand(0);
+    // gen.seed(0);
+
+    srand(time(NULL));
+    gen.seed(rd());
 }
 
 std::vector<dReal> RRTConnect::calcDirVector(
@@ -399,13 +404,17 @@ void RRTConnect::executeTrajectory()
     probot->SetActiveDOFValues(startQ);
 
     TrajectoryBasePtr traj = RaveCreateTrajectory(GetEnv(), "");
-    traj->Init(probot->GetActiveConfigurationSpecification());
+    ConfigurationSpecification conspec = probot->GetActiveConfigurationSpecification("linear");
+    conspec.AddDeltaTimeGroup();
+    traj->Init(conspec);
 
     int i = 0;
-    std::vector<double> point;
+    std::vector<dReal> point;
     for (auto rit = path.rbegin(); rit != path.rend(); ++rit)
     {
-        traj->Insert(i, *rit);
+        point = *rit;
+        point.push_back(i*0.3);
+        traj->Insert(i, point, conspec, true);
         i++;
     }
     probot->GetController()->SetPath(traj);
@@ -638,21 +647,21 @@ bool RRTConnect::run(std::ostream& sout, std::istream& sinput)
     std::cout << "Path Nodes  : " << path.size() << std::endl;
     
     // Time path smoothing
-    startTime = time(NULL);
-    smoothPath();
-    endTime = time(NULL);
-    std::cout << "\nSmooth Time : " << endTime - startTime << std::endl;
+    // startTime = time(NULL);
+    // smoothPath();
+    // endTime = time(NULL);
+    // std::cout << "\nSmooth Time : " << endTime - startTime << std::endl;
     
     plotTrajectory(blue, smoothedPath);
     executeTrajectory();
     
     pathDist = pathLength(path);
-    double smoothedPathDist = pathLength(smoothedPath);
+    // double smoothedPathDist = pathLength(smoothedPath);
 
-    std::cout << "\nPath Length : " << pathDist << std::endl;
-    std::cout << "Path Nodes  : " << path.size() << std::endl;
-    std::cout << "Smoothed Len: " << smoothedPathDist << std::endl;
-    std::cout << "Smoothed Nod: " << smoothedPath.size() << std::endl;
+    // std::cout << "\nPath Length : " << pathDist << std::endl;
+    // std::cout << "Path Nodes  : " << path.size() << std::endl;
+    // std::cout << "Smoothed Len: " << smoothedPathDist << std::endl;
+    // std::cout << "Smoothed Nod: " << smoothedPath.size() << std::endl;
 
     return true;
 }

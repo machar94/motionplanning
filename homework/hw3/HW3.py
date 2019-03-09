@@ -28,9 +28,9 @@ def tuckarms(env,robot):
         robot.GetController().SetDesired(robot.GetDOFValues())
     waitrobot(robot)
 
-def plotStatistics(time, nodes, samples, goalbias):
+def plotStatistics(times, nodes, samples, goalbias):
     print "\n\n===== Summary of Simulations ====="
-    print "Average Time    : %f" % (np.average(time))
+    print "Average Time    : %f" % (np.average(times))
     print "Average Samples : %f" % (np.average(samples))
     print "Average Nodes   : %f" % (np.average(nodes))
 
@@ -47,7 +47,7 @@ def plotStatistics(time, nodes, samples, goalbias):
 
     f_handle = file(FILENAME, 'a')
     np.savetxt(f_handle, goalbias, delimiter=',', fmt='%1.2f')
-    np.savetxt(f_handle, time, delimiter=',', fmt='%1.2f')
+    np.savetxt(f_handle, times, delimiter=',', fmt='%1.2f')
     np.savetxt(f_handle, nodes, delimiter=',', fmt='%1.2f')
     np.savetxt(f_handle, samples, delimiter=',', fmt='%1.2f')
     f_handle.close()
@@ -118,7 +118,7 @@ if __name__ == "__main__":
         RRTConnect.SendCommand('init')
         # RRTConnect.SendCommand('printclass')
 
-        time    = np.empty(shape=[0,1])
+        times    = np.empty(shape=[0,1])
         samples = np.empty(shape=[0,1])
         nodes   = np.empty(shape=[0,1])
         goalBL  = np.empty(shape=[0,1])
@@ -131,7 +131,7 @@ if __name__ == "__main__":
         result = RRTConnect.SendCommand('run')
 
         data = [int(val) for val in result.split()]
-        time = np.append(time, [[data[0]]], axis=0)
+        times = np.append(times, [[data[0]]], axis=0)
         nodes = np.append(nodes, [[data[1]]], axis=0)
         samples = np.append(samples, [[data[2]]], axis=0)
         goalBL = np.append(goalBL, [[GOAL_BIAS_VAL]], axis=0)
@@ -146,7 +146,7 @@ if __name__ == "__main__":
         #     result = RRTConnect.SendCommand('run')
 
         #     data = [int(val) for val in result.split()]
-        #     time = np.append(time, [[data[0]]], axis=0)
+        #     times = np.append(times, [[data[0]]], axis=0)
         #     nodes = np.append(nodes, [[data[1]]], axis=0)
         #     samples = np.append(samples, [[data[2]]], axis=0)
         #     goalBL = np.append(goalBL, [[GOAL_BIAS_VAL]], axis=0)
@@ -162,14 +162,14 @@ if __name__ == "__main__":
         #     result = RRTConnect.SendCommand('run')
 
         #     data = [int(val) for val in result.split()]
-        #     time = np.append(time, [[data[0]]], axis=0)
+        #     times = np.append(times, [[data[0]]], axis=0)
         #     nodes = np.append(nodes, [[data[1]]], axis=0)
         #     samples = np.append(samples, [[data[2]]], axis=0)
         #     goalBL = np.append(goalBL, [[goalbias]], axis=0)
 
         #     goalbias = goalbias + 5
 
-        plotStatistics(np.transpose(time), np.transpose(nodes), np.transpose(samples), np.transpose(goalBL))
+        plotStatistics(np.transpose(times), np.transpose(nodes), np.transpose(samples), np.transpose(goalBL))
  
         ### END OF YOUR CODE ###
     waitrobot(robot)
