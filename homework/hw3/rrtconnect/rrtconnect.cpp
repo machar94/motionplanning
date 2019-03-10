@@ -275,7 +275,7 @@ private:
 
     void plotTrajectory(const float color[4], std::vector<std::vector<double> >& path);
 
-    void executeTrajectory();
+    void executeTrajectory(std::vector<std::vector<double> >& p);
 
     void smoothPath();
 
@@ -421,7 +421,8 @@ bool RRTConnect::SetSmoothIteration(std::ostream& sout, std::istream& sinput)
     smoothIter = atof(sval.c_str());
     return true;
 }
-void RRTConnect::executeTrajectory()
+
+void RRTConnect::executeTrajectory(std::vector<std::vector<double> >& p)
 {
     probot->SetActiveDOFValues(startQ);
 
@@ -432,7 +433,7 @@ void RRTConnect::executeTrajectory()
 
     int i = 0;
     std::vector<dReal> point;
-    for (auto rit = path.rbegin(); rit != path.rend(); ++rit)
+    for (auto rit = p.rbegin(); rit != p.rend(); ++rit)
     {
         point = *rit;
         point.push_back(i*0.01);
@@ -676,7 +677,7 @@ bool RRTConnect::run(std::ostream& sout, std::istream& sinput)
     std::cout << "\nSmooth Time : " << endTime - startTime << std::endl;
     
     plotTrajectory(blue, smoothedPath);
-    executeTrajectory();
+    executeTrajectory(smoothedPath);
     
     pathDist = pathLength(path);
     double smoothedPathDist = pathLength(smoothedPath);
