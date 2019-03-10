@@ -16,6 +16,7 @@
 #define DEFAULT_GOAL_BIAS       10
 #define L_END_EFFECTOR_LINK_IDX 49
 #define NUM_SMOOTHING_ITER      200
+#define RESERVE_CAPACITY        10000
 
 using namespace OpenRAVE;
 
@@ -120,6 +121,8 @@ public:
 
     size_t getSize() const { return nodes.size(); }
 
+    void reserve(const int capacity) { nodes.reserve(capacity); }
+
     // Calculates the euclidian distance between two configurations
     double calcEuclidianDist(const std::vector<double>& q1,
                             const std::vector<double>& q2) const;
@@ -221,6 +224,7 @@ private:
     double stepSize;     // Length of step towards sampled config
     int goalBias;       // Select goalQ every goalBias percent of time
     int gSamples;       // Number of time the goal has been sampled
+    unsigned smoothIter;     // Number of iterations of smoothing that should be applied
 
     std::vector<dReal> llim;        // lower limits of active joints
     std::vector<dReal> ulim;        // upper limits of active joints
@@ -233,6 +237,7 @@ private:
 
     std::vector<std::vector<double> > path;
     std::vector<std::vector<double> > smoothedPath;
+    
 public:
 
     RRTConnect(EnvironmentBasePtr penv, std::istream& ss);
@@ -250,6 +255,8 @@ public:
     bool SetNumSamples(std::ostream& sout, std::istream& sinput);
 
     bool SetGoalBias(std::ostream& sout, std::istream& sinput);
+
+    bool SetSmoothIteration(std::ostream& sout, std::istream& sinput);
 
     bool printClass(std::ostream& sout, std::istream& sinput);
 
@@ -272,8 +279,9 @@ private:
 
     void smoothPath();
 
-    std::vector<dReal> calcDirVector(std::vector<dReal> v1, 
-                                     std::vector<dReal> v2);
+    std::vector<dReal> calcDirVector(const std::vector<dReal>& v1, 
+                                     const std::vector<dReal>& v2,
+                                     const std::vector<double>& w);
 
     double pathLength(std::vector<std::vector<double> > & path);
 
@@ -287,6 +295,7 @@ RRTConnect::RRTConnect(EnvironmentBasePtr penv, std::istream& ss)
     , stepSize(0.0)
     , goalBias(DEFAULT_GOAL_BIAS)
     , gSamples(0)
+    , smoothIter(NUM_SMOOTHING_ITER)
 {
     RegisterCommand("SetGoal",boost::bind(&RRTConnect::SetGoal,this,_1,_2),
                     "Sets the goal config for motion planner");
@@ -298,6 +307,8 @@ RRTConnect::RRTConnect(EnvironmentBasePtr penv, std::istream& ss)
                     "Sets the number of samples to sample in cspace before timing out");
     RegisterCommand("SetGoalBias",boost::bind(&RRTConnect::SetGoalBias,this,_1,_2),
                     "Sets how often the goal config should be sampled");
+    RegisterCommand("SetSmoothIteration",boost::bind(&RRTConnect::SetSmoothIteration,this,_1,_2),
+                    "Sets how many iterations of smoothing should be applied");
     RegisterCommand("printClass",boost::bind(&RRTConnect::printClass,this,_1,_2),
                     "Debug function for printing internal members of rrt class");
     RegisterCommand("Init",boost::bind(&RRTConnect::Init,this,_1,_2),
@@ -311,21 +322,23 @@ RRTConnect::RRTConnect(EnvironmentBasePtr penv, std::istream& ss)
     printVector("Normalized W:", noWristRollW);
 
     std::random_device rd;
-    
-    // For testing so seed generated is the same
-    // srand(0);
-    // gen.seed(0);
+    tree.reserve(RESERVE_CAPACITY);
 
-    srand(time(NULL));
-    gen.seed(rd());
+    // For testing so seed generated is the same
+    srand(313);
+    gen.seed(313);
+
+    // srand(time(NULL));
+    // gen.seed(rd());
 }
 
 std::vector<dReal> RRTConnect::calcDirVector(
-    std::vector<dReal> v1, 
-    std::vector<dReal> v2)
+    const std::vector<dReal>& v1, 
+    const std::vector<dReal>& v2,
+    const std::vector<double>& w)
 {
     std::vector<dReal> dir (v2.size(), 0.0);
-    double dist = tree.calcEuclidianDist(v1, v2, noWristRollW);
+    double dist = tree.calcEuclidianDist(v1, v2, w);
     
     for (unsigned i = 0; i < v2.size(); ++i)
     {
@@ -339,7 +352,7 @@ void RRTConnect::smoothPath()
     smoothedPath.clear();
     smoothedPath.insert(smoothedPath.begin(), path.begin(), path.end());
 
-    for (unsigned i = 0; i < NUM_SMOOTHING_ITER; ++i)
+    for (unsigned i = 0; i < smoothIter; ++i)
     {
         // 1. Choose two nodes without repeating
         int idx1 = 0, idx2 = 0;
@@ -363,7 +376,9 @@ void RRTConnect::smoothPath()
         // 2. Walk from node 1 towards node 2 with stepSize
         bool smoothing = true;
         std::vector<std::vector<dReal> > shorterPath;
-        std::vector<dReal> vec = calcDirVector(n1, n2);
+
+        std::vector<double> w(n1.size(), 1.0);
+        std::vector<dReal> vec = calcDirVector(n1, n2, w);
         
         while (smoothing)
         {
@@ -399,6 +414,13 @@ void RRTConnect::smoothPath()
     }
 }
 
+bool RRTConnect::SetSmoothIteration(std::ostream& sout, std::istream& sinput)
+{
+    std::string sval;
+    sinput >> sval;
+    smoothIter = atof(sval.c_str());
+    return true;
+}
 void RRTConnect::executeTrajectory()
 {
     probot->SetActiveDOFValues(startQ);
@@ -643,25 +665,23 @@ bool RRTConnect::run(std::ostream& sout, std::istream& sinput)
     plotTrajectory(red, path);
 
     double pathDist = pathLength(path);
-    std::cout << "\nPath Length : " << pathDist << std::endl;
-    std::cout << "Path Nodes  : " << path.size() << std::endl;
     
     // Time path smoothing
-    // startTime = time(NULL);
-    // smoothPath();
-    // endTime = time(NULL);
-    // std::cout << "\nSmooth Time : " << endTime - startTime << std::endl;
+    startTime = time(NULL);
+    smoothPath();
+    endTime = time(NULL);
+    std::cout << "\nSmooth Time : " << endTime - startTime << std::endl;
     
     plotTrajectory(blue, smoothedPath);
     executeTrajectory();
     
     pathDist = pathLength(path);
-    // double smoothedPathDist = pathLength(smoothedPath);
+    double smoothedPathDist = pathLength(smoothedPath);
 
-    // std::cout << "\nPath Length : " << pathDist << std::endl;
-    // std::cout << "Path Nodes  : " << path.size() << std::endl;
-    // std::cout << "Smoothed Len: " << smoothedPathDist << std::endl;
-    // std::cout << "Smoothed Nod: " << smoothedPath.size() << std::endl;
+    std::cout << "\nPath Length : " << pathDist << std::endl;
+    std::cout << "Path Nodes  : " << path.size() << std::endl;
+    std::cout << "Smoothed Len: " << smoothedPathDist << std::endl;
+    std::cout << "Smoothed Nod: " << smoothedPath.size() << std::endl;
 
     return true;
 }
@@ -671,7 +691,7 @@ bool RRTConnect::takeStepsToSample(RRTNode* nn, const std::vector<double>& sampl
     std::vector<double> new_q(sample.size(), 0.0);
 
     // Calculate unit step direction vector
-    std::vector<double> vec = calcDirVector(nn->getConfig(), sample);
+    std::vector<double> vec = calcDirVector(nn->getConfig(), sample, noWristRollW);
 
     RRTNode* currNode = nn;
     while (true)

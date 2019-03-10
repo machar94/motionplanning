@@ -87,16 +87,16 @@ if __name__ == "__main__":
     waitrobot(robot)
 
     with env:
-        goalconfig = [0.449,-0.201,-0.151,0,0,-0.11,0]    # Actual goal
+        # goalconfig = [0.449,-0.201,-0.151,0,0,-0.11,0]    # Actual goal
         # goalconfig = [0.5255,1.29,-2.12,0,0,-1.38,0]      # level 4 goal
         # goalconfig = [0.5255,1.29,-2.12,0,0,-0.11,0]      # level 3 goal
-        # goalconfig = [-0.15,1.29,-2.12,0,0,-1.38,0]       # level 2 goal
+        goalconfig = [-0.15,1.29,-2.12,0,0,-1.38,0]       # level 2 goal
         # goalconfig = [-0.15,-0.35,-1.73,0,0,-0.11,0]      # level 1 goal
 
         ### YOUR CODE HERE ###
         NUM_SAMPLES = 10000
         GOAL_BIAS_VAL = 10     # int value between (0, 100]
-        STEP_SIZE = 0.15
+        STEP_SIZE = 0.2
 
         # Register the start configuration
         startConfigStr = ' '.join([str(e) for e in startconfig])
@@ -137,7 +137,7 @@ if __name__ == "__main__":
         goalBL = np.append(goalBL, [[GOAL_BIAS_VAL]], axis=0)
 
         ###############################
-        # Test for various single test
+        # Test averaging 10 times
         ###############################
         # numLoops = 10;
         # for i in xrange(0,numLoops):
@@ -179,12 +179,12 @@ if __name__ == "__main__":
         #     times = np.append(times, [[np.average(times_avg)]], axis=0)
         #     nodes = np.append(nodes, [[np.average(nodes_avg)]], axis=0)
         #     samples = np.append(samples, [[np.average(samples_avg)]], axis=0)
-        #     goalBL = np.append(goalBL, [[goalbias]], axis=0)
+        #     goalBL = np.append(goalBL, [[GOAL_BIAS_VAL]], axis=0)
 
         #     goalbias = goalbias + 5
 
         ###############################
-        # Test for smoothing
+        # Test for averaging smoothing
         ###############################
         # smoothing = 20;
         # for i in xrange(0,numLoops):
@@ -197,6 +197,7 @@ if __name__ == "__main__":
         #     nodes = np.append(nodes, [[data[1]]], axis=0)
         #     samples = np.append(samples, [[data[2]]], axis=0)
         #     goalBL = np.append(goalBL, [[GOAL_BIAS_VAL]], axis=0)
+
 
         plotStatistics(np.transpose(times), np.transpose(nodes), np.transpose(samples), np.transpose(goalBL))
  
