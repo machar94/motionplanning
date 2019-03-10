@@ -325,8 +325,8 @@ RRTConnect::RRTConnect(EnvironmentBasePtr penv, std::istream& ss)
     tree.reserve(RESERVE_CAPACITY);
 
     // For testing so seed generated is the same
-    srand(313);
-    gen.seed(313);
+    // srand(313);
+    // gen.seed(313);
 
     // srand(time(NULL));
     // gen.seed(rd());
@@ -435,7 +435,7 @@ void RRTConnect::executeTrajectory()
     for (auto rit = path.rbegin(); rit != path.rend(); ++rit)
     {
         point = *rit;
-        point.push_back(i*0.3);
+        point.push_back(i*0.01);
         traj->Insert(i, point, conspec, true);
         i++;
     }
@@ -454,6 +454,9 @@ bool RRTConnect::resetTree(std::ostream& sout, std::istream& sinput)
     
     // Clear any existing points in environment
     ghandle.clear();
+
+    // srand(313);
+    // gen.seed(313);
 
     return true;
 }
@@ -677,6 +680,9 @@ bool RRTConnect::run(std::ostream& sout, std::istream& sinput)
     
     pathDist = pathLength(path);
     double smoothedPathDist = pathLength(smoothedPath);
+    sout << smoothedPathDist << " ";    // Send out smoothed path dist
+    sout << endTime - startTime << " ";
+    sout << pathDist << " ";
 
     std::cout << "\nPath Length : " << pathDist << std::endl;
     std::cout << "Path Nodes  : " << path.size() << std::endl;

@@ -28,7 +28,7 @@ def tuckarms(env,robot):
         robot.GetController().SetDesired(robot.GetDOFValues())
     waitrobot(robot)
 
-def plotStatistics(times, nodes, samples, goalbias):
+def plotStatistics(times, nodes, samples, goalbias, pathL, smooth, smoothT, nspathl):
     print "\n\n===== Summary of Simulations ====="
     print "Average Time    : %f" % (np.average(times))
     print "Average Samples : %f" % (np.average(samples))
@@ -50,6 +50,10 @@ def plotStatistics(times, nodes, samples, goalbias):
     np.savetxt(f_handle, times, delimiter=',', fmt='%1.2f')
     np.savetxt(f_handle, nodes, delimiter=',', fmt='%1.2f')
     np.savetxt(f_handle, samples, delimiter=',', fmt='%1.2f')
+    np.savetxt(f_handle, smooth, delimiter=',', fmt='%1.2f')
+    np.savetxt(f_handle, pathL, delimiter=',', fmt='%1.2f')
+    np.savetxt(f_handle, smoothT, delimiter=',', fmt='%1.2f')
+    np.savetxt(f_handle, nspathl, delimiter=',', fmt='%1.2f')
     f_handle.close()
     
 
@@ -96,7 +100,8 @@ if __name__ == "__main__":
         ### YOUR CODE HERE ###
         NUM_SAMPLES = 10000
         GOAL_BIAS_VAL = 10     # int value between (0, 100]
-        STEP_SIZE = 0.15
+        STEP_SIZE = 0.05
+        smoothing = 20;
 
         # Register the start configuration
         startConfigStr = ' '.join([str(e) for e in startconfig])
@@ -119,9 +124,13 @@ if __name__ == "__main__":
         # RRTConnect.SendCommand('printclass')
 
         times    = np.empty(shape=[0,1])
-        samples = np.empty(shape=[0,1])
-        nodes   = np.empty(shape=[0,1])
-        goalBL  = np.empty(shape=[0,1])
+        samples  = np.empty(shape=[0,1])
+        nodes    = np.empty(shape=[0,1])
+        goalBL   = np.empty(shape=[0,1])
+        pathL    = np.empty(shape=[0,1])
+        smooth   = np.empty(shape=[0,1])
+        smoothT  = np.empty(shape=[0,1])
+        nspathl  = np.empty(shape=[0,1])
 
         ###############################
         # Test for various single test
@@ -130,14 +139,19 @@ if __name__ == "__main__":
         RRTConnect.SendCommand('setgoalbias ' + str(GOAL_BIAS_VAL))
         result = RRTConnect.SendCommand('run')
 
-        data = [int(val) for val in result.split()]
-        times = np.append(times, [[data[0]]], axis=0)
-        nodes = np.append(nodes, [[data[1]]], axis=0)
+        data    = [double(val) for val in result.split()]
+        times   = np.append(times, [[data[0]]], axis=0)
+        nodes   = np.append(nodes, [[data[1]]], axis=0)
         samples = np.append(samples, [[data[2]]], axis=0)
-        goalBL = np.append(goalBL, [[GOAL_BIAS_VAL]], axis=0)
+        goalBL  = np.append(goalBL, [[GOAL_BIAS_VAL]], axis=0)
+        pathL   = np.append(pathL, [[data[3]]], axis=0)
+        smooth  = np.append(smooth, [[smoothing]], axis=0)
+        smoothT = np.append(smoothT, [[data[4]]], axis=0)
+        nspathl = np.append(nspathl, [[data[5]]], axis=0)
+
 
         ###############################
-        # Test for various single test
+        # Test for multiple runs
         ###############################
         # numLoops = 10;
         # for i in xrange(0,numLoops):
@@ -145,7 +159,7 @@ if __name__ == "__main__":
         #     RRTConnect.SendCommand('setgoalbias ' + str(GOAL_BIAS_VAL))
         #     result = RRTConnect.SendCommand('run')
 
-        #     data = [int(val) for val in result.split()]
+        #     data = [double(val) for val in result.split()]
         #     times = np.append(times, [[data[0]]], axis=0)
         #     nodes = np.append(nodes, [[data[1]]], axis=0)
         #     samples = np.append(samples, [[data[2]]], axis=0)
@@ -171,7 +185,7 @@ if __name__ == "__main__":
         #         RRTConnect.SendCommand('setgoalbias ' + str(goalbias))
         #         result = RRTConnect.SendCommand('run')
 
-        #         data = [int(val) for val in result.split()]
+        #         data = [double(val) for val in result.split()]
         #         times_avg   = np.append(times_avg, [[data[0]]], axis=0)
         #         nodes_avg   = np.append(nodes_avg, [[data[1]]], axis=0)
         #         samples_avg = np.append(samples_avg, [[data[2]]], axis=0)
@@ -186,19 +200,52 @@ if __name__ == "__main__":
         ###############################
         # Test for smoothing
         ###############################
-        # smoothing = 20;
+        # while smoothing < 300:
+        #     RRTConnect.SendCommand('resettree')
+        #     RRTConnect.SendCommand('setsmoothiteration ' + str(smoothing))
+        #     result = RRTConnect.SendCommand('run')
+
+        #     data    = [double(val) for val in result.split()]
+        #     times   = np.append(times, [[data[0]]], axis=0)
+        #     nodes   = np.append(nodes, [[data[1]]], axis=0)
+        #     samples = np.append(samples, [[data[2]]], axis=0)
+        #     goalBL  = np.append(goalBL, [[GOAL_BIAS_VAL]], axis=0)
+        #     pathL   = np.append(pathL, [[data[3]]], axis=0)
+        #     smooth  = np.append(smooth, [[smoothing]], axis=0)
+            
+        #     smoothing = smoothing + 20
+
+        ###############################
+        # Data collection for HW Pt 5
+        ###############################
+
+        ###############################
+        # Test for multiple runs
+        ###############################
+        # numLoops = 30;
         # for i in xrange(0,numLoops):
         #     RRTConnect.SendCommand('resettree')
         #     RRTConnect.SendCommand('setgoalbias ' + str(GOAL_BIAS_VAL))
         #     result = RRTConnect.SendCommand('run')
 
-        #     data = [int(val) for val in result.split()]
+        #     data = [double(val) for val in result.split()]
         #     times = np.append(times, [[data[0]]], axis=0)
         #     nodes = np.append(nodes, [[data[1]]], axis=0)
         #     samples = np.append(samples, [[data[2]]], axis=0)
         #     goalBL = np.append(goalBL, [[GOAL_BIAS_VAL]], axis=0)
+        #     smoothT = np.append(smoothT, [[data[4]]], axis=0)
+        #     nspathl = np.append(nspathl, [[data[5]]], axis=0)
 
-        plotStatistics(np.transpose(times), np.transpose(nodes), np.transpose(samples), np.transpose(goalBL))
+
+        plotStatistics(
+            np.transpose(times),
+            np.transpose(nodes),
+            np.transpose(samples),
+            np.transpose(goalBL), 
+            np.transpose(pathL), 
+            np.transpose(smooth), 
+            np.transpose(smoothT),
+            np.transpose(nspathl))
  
         ### END OF YOUR CODE ###
     waitrobot(robot)
