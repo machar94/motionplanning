@@ -200,30 +200,10 @@ if __name__ == "__main__":
         ###############################
         # Test for smoothing
         ###############################
-        # while smoothing < 300:
-        #     RRTConnect.SendCommand('resettree')
-        #     RRTConnect.SendCommand('setsmoothiteration ' + str(smoothing))
-        #     result = RRTConnect.SendCommand('run')
-
-        #     data    = [double(val) for val in result.split()]
-        #     times   = np.append(times, [[data[0]]], axis=0)
-        #     nodes   = np.append(nodes, [[data[1]]], axis=0)
-        #     samples = np.append(samples, [[data[2]]], axis=0)
-        #     goalBL  = np.append(goalBL, [[GOAL_BIAS_VAL]], axis=0)
-        #     pathL   = np.append(pathL, [[data[3]]], axis=0)
-        #     smooth  = np.append(smooth, [[smoothing]], axis=0)
-        #     smoothT = np.append(smoothT, [[data[4]]], axis=0)
-        #     nspathl = np.append(nspathl, [[data[5]]], axis=0)
-            
-        #     smoothing = smoothing + 20
-
-        ###############################
-        # Data collection for HW Pt 5
-        ###############################
-        numLoops = 30;
-        for i in xrange(0,numLoops):
+        # Todo: Also fix srand in rrtconnect.cpp
+        while smoothing < 300:
             RRTConnect.SendCommand('resettree')
-            RRTConnect.SendCommand('setgoalbias ' + str(GOAL_BIAS_VAL))
+            RRTConnect.SendCommand('setsmoothiteration ' + str(smoothing))
             result = RRTConnect.SendCommand('run')
 
             data    = [double(val) for val in result.split()]
@@ -235,6 +215,27 @@ if __name__ == "__main__":
             smooth  = np.append(smooth, [[smoothing]], axis=0)
             smoothT = np.append(smoothT, [[data[4]]], axis=0)
             nspathl = np.append(nspathl, [[data[5]]], axis=0)
+            
+            smoothing = smoothing + 20
+
+        ###############################
+        # Data collection for HW Pt 5
+        ###############################
+        # numLoops = 30;
+        # for i in xrange(0,numLoops):
+        #     RRTConnect.SendCommand('resettree')
+        #     RRTConnect.SendCommand('setgoalbias ' + str(GOAL_BIAS_VAL))
+        #     result = RRTConnect.SendCommand('run')
+
+        #     data    = [double(val) for val in result.split()]
+        #     times   = np.append(times, [[data[0]]], axis=0)
+        #     nodes   = np.append(nodes, [[data[1]]], axis=0)
+        #     samples = np.append(samples, [[data[2]]], axis=0)
+        #     goalBL  = np.append(goalBL, [[GOAL_BIAS_VAL]], axis=0)
+        #     pathL   = np.append(pathL, [[data[3]]], axis=0)
+        #     smooth  = np.append(smooth, [[smoothing]], axis=0)
+        #     smoothT = np.append(smoothT, [[data[4]]], axis=0)
+        #     nspathl = np.append(nspathl, [[data[5]]], axis=0)
 
 
         plotStatistics(
