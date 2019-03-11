@@ -325,8 +325,8 @@ RRTConnect::RRTConnect(EnvironmentBasePtr penv, std::istream& ss)
     tree.reserve(RESERVE_CAPACITY);
 
     // For testing so seed generated is the same
-    srand(313);
-    gen.seed(313);
+    // srand(313);
+    // gen.seed(313);
 
     // srand(time(NULL));
     // gen.seed(rd());
@@ -456,8 +456,8 @@ bool RRTConnect::resetTree(std::ostream& sout, std::istream& sinput)
     // Clear any existing points in environment
     ghandle.clear();
 
-    srand(313);
-    gen.seed(313);
+    // srand(313);
+    // gen.seed(313);
 
     return true;
 }
