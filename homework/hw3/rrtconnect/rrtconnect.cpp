@@ -313,14 +313,14 @@ RRTConnect::RRTConnect(EnvironmentBasePtr penv, std::istream& ss)
                     "Clears all the nodes in the NodeTree except start");
 
     normalizeWeights();
-    printVector("Normalized W:", noWristRollW);
+    // printVector("Normalized W:", noWristRollW);
 
     std::random_device rd;
     tree.reserve(RESERVE_CAPACITY);
 
     // For testing so seed generated is the same
-    // srand(313);
-    // gen.seed(313);
+    srand(313);
+    gen.seed(313);
 
     // srand(time(NULL));
     // gen.seed(rd());
@@ -449,9 +449,10 @@ bool RRTConnect::resetTree(std::ostream& sout, std::istream& sinput)
     
     // Clear any existing points in environment
     ghandle.clear();
+    srand(time(NULL));
 
-    // srand(313);
-    // gen.seed(313);
+    srand(313);
+    gen.seed(313);
 
     return true;
 }
@@ -665,13 +666,13 @@ bool RRTConnect::run(std::ostream& sout, std::istream& sinput)
     double pathDist = pathLength(path);
     
     // Time path smoothing
-    startTime = time(NULL);
+    // startTime = time(NULL);
     smoothPath();
     endTime = time(NULL);
     std::cout << "\nSmooth Time : " << endTime - startTime << std::endl;
     
     plotTrajectory(blue, smoothedPath);
-    executeTrajectory(smoothedPath);
+    // executeTrajectory(smoothedPath);
     
     pathDist = pathLength(path);
     double smoothedPathDist = pathLength(smoothedPath);

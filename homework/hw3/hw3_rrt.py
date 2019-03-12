@@ -99,7 +99,7 @@ if __name__ == "__main__":
 
         ### YOUR CODE HERE ###
         NUM_SAMPLES = 10000
-        GOAL_BIAS_VAL = 10     # int value between (0, 100]
+        GOAL_BIAS_VAL = 11     # int value between (0, 100]
         STEP_SIZE = 0.05
         smoothing = 20;
 
@@ -121,7 +121,7 @@ if __name__ == "__main__":
         RRTConnect.SendCommand('setstepsize ' + str(STEP_SIZE))
 
         RRTConnect.SendCommand('init')
-        # RRTConnect.SendCommand('printclass')
+        RRTConnect.SendCommand('printclass')
 
         times    = np.empty(shape=[0,1])
         samples  = np.empty(shape=[0,1])
@@ -144,31 +144,31 @@ if __name__ == "__main__":
         # nodes   = np.append(nodes, [[data[1]]], axis=0)
         # samples = np.append(samples, [[data[2]]], axis=0)
         # goalBL  = np.append(goalBL, [[GOAL_BIAS_VAL]], axis=0)
-        # pathL   = np.append(pathL, [[data[3]]], axis=0)
-        # smooth  = np.append(smooth, [[smoothing]], axis=0)
-        # smoothT = np.append(smoothT, [[data[4]]], axis=0)
-        # nspathl = np.append(nspathl, [[data[5]]], axis=0)
+        # # pathL   = np.append(pathL, [[data[3]]], axis=0)
+        # # smooth  = np.append(smooth, [[smoothing]], axis=0)
+        # # smoothT = np.append(smoothT, [[data[4]]], axis=0)
+        # # nspathl = np.append(nspathl, [[data[5]]], axis=0)
 
 
         ###############################
         # Test for multiple runs
         ###############################
-        numLoops = 10;
-        for i in xrange(0,numLoops):
-            RRTConnect.SendCommand('resettree')
-            RRTConnect.SendCommand('setgoalbias ' + str(GOAL_BIAS_VAL))
-            result = RRTConnect.SendCommand('run')
+        # numLoops = 10;
+        # for i in xrange(0,numLoops):
+        #     RRTConnect.SendCommand('resettree')
+        #     RRTConnect.SendCommand('setgoalbias ' + str(GOAL_BIAS_VAL))
+        #     result = RRTConnect.SendCommand('run')
 
-            data = [double(val) for val in result.split()]
-            times = np.append(times, [[data[0]]], axis=0)
-            nodes = np.append(nodes, [[data[1]]], axis=0)
-            samples = np.append(samples, [[data[2]]], axis=0)
+        #     data = [double(val) for val in result.split()]
+        #     times = np.append(times, [[data[0]]], axis=0)
+        #     nodes = np.append(nodes, [[data[1]]], axis=0)
+        #     samples = np.append(samples, [[data[2]]], axis=0)
 
         ###############################
         # Test for various goal biasing
         ###############################
 
-        # goalbias = 1;
+        # goalbias = 66
         # numLoops = 10;
         # while goalbias < 100:
             

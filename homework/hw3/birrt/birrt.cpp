@@ -272,7 +272,7 @@ private:
     void sampleConfiguration(std::vector<double>& q);
 
     RRTNode* takeStepsToSample(
-        NodeTree& tree, 
+        NodeTree* tree, 
         RRTNode* node, 
         const std::vector<double>& q);
 
@@ -282,6 +282,16 @@ private:
         const std::vector<double>& w) const;
 
     bool checkCollision(const std::vector<dReal>& config) const;
+
+    void plotTrajectory(
+        const float color[4], 
+        std::vector<std::vector<double> >& path);
+
+    void smoothPath();
+
+    double pathLength(std::vector<std::vector<double> >& path);
+
+    void executeTrajectory(std::vector<std::vector<double> >& p);
 
 };
 
@@ -389,6 +399,10 @@ bool BiRRT::SetRandomSeed(std::ostream& sout, std::istream& sinput)
     std::string sval;
     sinput >> sval;
     randseed = atoi(sval.c_str());
+
+    srand(randseed);
+    gen.seed(randseed);
+
     return true;
 } 
 
@@ -457,7 +471,8 @@ bool BiRRT::resetTrees(std::ostream& sout, std::istream& sinput)
 bool BiRRT::run(std::ostream& sout, std::istream& sinput)
 {
     time_t startTime(time(NULL)), endTime;
-    NodeTree& growT = stree, reachT = gtree;
+    NodeTree* growT = &stree;
+    NodeTree* reachT = &gtree;
     Status code = INVALID;
     unsigned i = 1;
 
@@ -470,38 +485,48 @@ bool BiRRT::run(std::ostream& sout, std::istream& sinput)
         }
 
         // Select tree to grow based on which tree has less nodes
-        growT  = (stree.getSize() <= gtree.getSize()) ? stree : gtree;
-        reachT = (stree.getSize() <= gtree.getSize()) ? gtree : stree;
+        growT  = (stree.getSize() <= gtree.getSize()) ? &stree : &gtree;
+        reachT = (stree.getSize() <= gtree.getSize()) ? &gtree : &stree;
 
         // Sample configuration and grow from the grow tree
         std::vector<double> sample(startQ.size(), 0.0);
         sampleConfiguration(sample);
-        RRTNode* nearestNode = growT.nearestNeighbor(sample);
+        RRTNode* nearestNode = growT->nearestNeighbor(sample);
         RRTNode* target = takeStepsToSample(growT, nearestNode, sample);
 
         if (target)
         {
             // Calculate nearest node from other tree and grow
-            nearestNode = reachT.nearestNeighbor(target->getConfig());
-            RRTNode* nodeAdded = takeStepsToSample(reachT, nearestNode, target);
+            nearestNode = reachT->nearestNeighbor(target->getConfig());
+            RRTNode* nodeAdded = takeStepsToSample(reachT, nearestNode, target->getConfig());
 
             // If the node reached is equal to the target, trees have met
-            if (nodeAdded->getConfig() == target->getConfig())
+            if (nodeAdded != NULL && (nodeAdded->getConfig() == target->getConfig()))
             {
                 endTime = time(NULL);
                 code = SUCCESS;
 
                 // Extract path from both trees and merge
+                std::vector<std::vector<double> > otherhalf;
                 if (growT->getRoot()->getConfig() == startQ)
                 {
-                    path = growT.getPath(target);
+                    path = growT->getPath(target);
                     std::reverse(path.begin(), path.end());
-                    auto otherhalf = reachT.getPath()
-
-                    // The node at which both trees meet is added twice; hence +1
-                    std::insert(path.end(), otherhalf.begin()+1, otherhalf.end())
+                    otherhalf = reachT->getPath(nodeAdded);
+                }
+                else
+                {
+                    path = reachT->getPath(nodeAdded);
+                    std::reverse(path.begin(), path.end());
+                    otherhalf = growT->getPath(target);
                 }
 
+                // The node at which both trees meet is added twice; hence +1
+                path.insert(path.end(), otherhalf.begin()+1, otherhalf.end());
+
+                sout << endTime - startTime << " ";
+                sout << stree.getSize() + gtree.getSize() - 2 <<  " ";
+                sout << i << " ";
                 break;
             }
         }
@@ -520,8 +545,23 @@ bool BiRRT::run(std::ostream& sout, std::istream& sinput)
 
     if (code == SUCCESS)
     {
-        
-        path = tree.getPath
+        plotTrajectory(red, path);
+        double pathDist = pathLength(path);
+    
+        // Time path smoothing
+        // startTime = time(NULL);
+        // smoothPath();
+        // endTime = time(NULL);
+        // std::cout << "\nSmooth Time : " << endTime - startTime << std::endl;
+    
+        // plotTrajectory(blue, smoothedPath);
+        // double smoothedPathDist = pathLength(smoothedPath);
+
+        // executeTrajectory(smoothedPath);
+    
+        // sout << smoothedPathDist << " ";
+        // sout << endTime - startTime << " ";
+        sout << pathDist << " ";
     }
 
     return true;
@@ -563,7 +603,7 @@ void BiRRT::sampleConfiguration(std::vector<double>& q)
 }
 
 RRTNode* BiRRT::takeStepsToSample(
-    NodeTree& tree, 
+    NodeTree* tree, 
     RRTNode* nn, 
     const std::vector<double>& sample)
 {
@@ -585,10 +625,10 @@ RRTNode* BiRRT::takeStepsToSample(
             new_q = currNode->getConfig() + vec; 
         }
 
-        if (checkCollision(new_q))
+        if (!checkCollision(new_q))
         {
             RRTNode* newNode = new RRTNode(new_q, currNode);
-            tree.add(newNode);
+            tree->add(newNode);
             currNode = newNode;
             target = newNode;
 
@@ -624,5 +664,120 @@ bool BiRRT::checkCollision(const std::vector<dReal>& config) const
     bool ret;
     ret = GetEnv()->CheckCollision(RobotBaseConstPtr(probot));
     ret = probot->CheckSelfCollision() || ret;
-    return !ret;
+    return ret;
+}
+
+void BiRRT::plotTrajectory(const float color[4], std::vector<std::vector<double> >& path) 
+{
+    // Set robot to that configuration
+    std::vector<float> p(3,0.0);
+
+    for (auto it = path.begin(); it != path.end(); ++it)
+    {
+        probot->SetActiveDOFValues(*it);
+        // Get the position of the end effector
+        Transform endEffector = probot->GetLinks()[L_END_EFFECTOR_LINK_IDX]->GetTransform();
+        p[0] = endEffector.trans.x;
+        p[1] = endEffector.trans.y;
+        p[2] = endEffector.trans.z;
+        ghandle.push_back(GetEnv()->plot3(&p[0],1,12,5,color,0));
+    }
+}
+
+void BiRRT::smoothPath()
+{
+    smoothedPath.clear();
+    smoothedPath.insert(smoothedPath.begin(), path.begin(), path.end());
+
+    for (unsigned i = 0; i < smoothIter; ++i)
+    {
+        // 1. Choose two nodes without repeating
+        int idx1 = 0, idx2 = 0;
+
+        // Desire:
+        // 1. Nodes selected should not be the same
+        // 2. Nodes selected should not be right next to each other
+        while ((idx1 == idx2) || std::abs(idx2-idx1) == 1)
+        {
+            idx1 = rand() % smoothedPath.size();
+            idx2 = rand() % smoothedPath.size();
+
+            if (idx1 > idx2)
+            {
+                std::swap(idx1,idx2);
+            }
+        }
+        std::vector<dReal> n1 = smoothedPath[idx1];
+        std::vector<dReal> n2 = smoothedPath[idx2];
+
+        // 2. Walk from node 1 towards node 2 with stepSize
+        std::vector<std::vector<dReal> > shorterPath;
+
+        std::vector<double> w(n1.size(), 1.0);
+        std::vector<dReal> vec = calcDirVector(n1, n2, w);
+        
+        while (true)
+        {
+            // Take a step forward to node 2
+            n1 = n1 + vec;
+
+            // Check that position is valid
+            if (checkCollision(n1))
+            {
+                shorterPath.clear();
+                break;
+            }
+            else
+            {
+                shorterPath.push_back(n1);
+            }
+
+            // If sufficiently close to node 2 stop
+            double dist = calcEuclidianDist(n1,n2);
+            if (dist <= stepSize)
+            {
+                break;
+            }
+        }
+
+        if (shorterPath.size() > 0)
+        {
+            smoothedPath.erase(smoothedPath.begin()+idx1+1, smoothedPath.begin()+idx2);
+            smoothedPath.insert(smoothedPath.begin()+idx1+1, shorterPath.begin(), shorterPath.end());
+        }
+    }
+}
+
+double BiRRT::pathLength(std::vector<std::vector<double> >& path)
+{
+    // There should be at least two elements in the path
+    assert(path.size() > 1);
+
+    double dist = 0.0;
+    for (unsigned i = 0; i < path.size()-1; ++i)
+    {
+        dist += calcEuclidianDist(path[i],path[i+1]);
+    }
+    return dist;    
+}
+
+void BiRRT::executeTrajectory(std::vector<std::vector<double> >& p)
+{
+    probot->SetActiveDOFValues(startQ);
+
+    TrajectoryBasePtr traj = RaveCreateTrajectory(GetEnv(), "");
+    ConfigurationSpecification conspec = probot->GetActiveConfigurationSpecification("linear");
+    conspec.AddDeltaTimeGroup();
+    traj->Init(conspec);
+
+    int i = 0;
+    std::vector<dReal> point;
+    for (auto it = p.begin(); it != p.end(); ++it)
+    {
+        point = *it;
+        point.push_back(i*0.01);
+        traj->Insert(i, point, conspec, true);
+        i++;
+    }
+    probot->GetController()->SetPath(traj);
 }
