@@ -153,49 +153,48 @@ if __name__ == "__main__":
         ###############################
         # Test for multiple runs
         ###############################
-        # numLoops = 10;
-        # for i in xrange(0,numLoops):
-        #     RRTConnect.SendCommand('resettree')
-        #     RRTConnect.SendCommand('setgoalbias ' + str(GOAL_BIAS_VAL))
-        #     result = RRTConnect.SendCommand('run')
+        numLoops = 10;
+        for i in xrange(0,numLoops):
+            RRTConnect.SendCommand('resettree')
+            RRTConnect.SendCommand('setgoalbias ' + str(GOAL_BIAS_VAL))
+            result = RRTConnect.SendCommand('run')
 
-        #     data = [double(val) for val in result.split()]
-        #     times = np.append(times, [[data[0]]], axis=0)
-        #     nodes = np.append(nodes, [[data[1]]], axis=0)
-        #     samples = np.append(samples, [[data[2]]], axis=0)
-        #     goalBL = np.append(goalBL, [[GOAL_BIAS_VAL]], axis=0)
+            data = [double(val) for val in result.split()]
+            times = np.append(times, [[data[0]]], axis=0)
+            nodes = np.append(nodes, [[data[1]]], axis=0)
+            samples = np.append(samples, [[data[2]]], axis=0)
 
         ###############################
         # Test for various goal biasing
         ###############################
 
-        goalbias = 1;
-        numLoops = 10;
-        while goalbias < 100:
+        # goalbias = 1;
+        # numLoops = 10;
+        # while goalbias < 100:
             
-            print "\n\n================================="
-            print "===== Evaluating Goal Bias %d =====" % goalbias
+        #     print "\n\n================================="
+        #     print "===== Evaluating Goal Bias %d =====" % goalbias
 
-            times_avg    = np.empty(shape=[0,1])
-            samples_avg  = np.empty(shape=[0,1])
-            nodes_avg    = np.empty(shape=[0,1])
+        #     times_avg    = np.empty(shape=[0,1])
+        #     samples_avg  = np.empty(shape=[0,1])
+        #     nodes_avg    = np.empty(shape=[0,1])
 
-            for i in xrange(0,numLoops):
-                RRTConnect.SendCommand('resettree')
-                RRTConnect.SendCommand('setgoalbias ' + str(goalbias))
-                result = RRTConnect.SendCommand('run')
+        #     for i in xrange(0,numLoops):
+        #         RRTConnect.SendCommand('resettree')
+        #         RRTConnect.SendCommand('setgoalbias ' + str(goalbias))
+        #         result = RRTConnect.SendCommand('run')
 
-                data = [double(val) for val in result.split()]
-                times_avg   = np.append(times_avg, [[data[0]]], axis=0)
-                nodes_avg   = np.append(nodes_avg, [[data[1]]], axis=0)
-                samples_avg = np.append(samples_avg, [[data[2]]], axis=0)
+        #         data = [double(val) for val in result.split()]
+        #         times_avg   = np.append(times_avg, [[data[0]]], axis=0)
+        #         nodes_avg   = np.append(nodes_avg, [[data[1]]], axis=0)
+        #         samples_avg = np.append(samples_avg, [[data[2]]], axis=0)
             
-            times = np.append(times, [[np.average(times_avg)]], axis=0)
-            nodes = np.append(nodes, [[np.average(nodes_avg)]], axis=0)
-            samples = np.append(samples, [[np.average(samples_avg)]], axis=0)
-            goalBL = np.append(goalBL, [[goalbias]], axis=0)
+        #     times = np.append(times, [[np.average(times_avg)]], axis=0)
+        #     nodes = np.append(nodes, [[np.average(nodes_avg)]], axis=0)
+        #     samples = np.append(samples, [[np.average(samples_avg)]], axis=0)
+        #     goalBL = np.append(goalBL, [[goalbias]], axis=0)
 
-            goalbias = goalbias + 5
+        #     goalbias = goalbias + 5
 
         ###############################
         # Test for smoothing

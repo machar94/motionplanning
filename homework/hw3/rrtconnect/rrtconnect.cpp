@@ -109,12 +109,6 @@ public:
     // use a linear search as opposed to using a kd-tree as apparently the tree
     // only scales better once the number of nodes in the space is more than
     // 2000.
-    //
-    // One assumption made is that because the constructor for the class
-    // requires that a node initialize the root of the tree, there will always
-    // be at least one node in the list of nodes. So given a configuration q, a
-    // valid node will always be returned i.e. you don't need to worry about the
-    // tree being empty.
     RRTNode* nearestNeighbor(const std::vector<double>& q) const;
 
     RRTNode* nearestNeighbor(RRTNode* const node) const;
