@@ -319,11 +319,11 @@ RRTConnect::RRTConnect(EnvironmentBasePtr penv, std::istream& ss)
     tree.reserve(RESERVE_CAPACITY);
 
     // For testing so seed generated is the same
-    srand(313);
-    gen.seed(313);
+    // srand(313);
+    // gen.seed(313);
 
-    // srand(time(NULL));
-    // gen.seed(rd());
+    srand(time(NULL));
+    gen.seed(rd());
 }
 
 std::vector<dReal> RRTConnect::calcDirVector(
@@ -451,8 +451,8 @@ bool RRTConnect::resetTree(std::ostream& sout, std::istream& sinput)
     ghandle.clear();
     srand(time(NULL));
 
-    srand(313);
-    gen.seed(313);
+    // srand(313);
+    // gen.seed(313);
 
     return true;
 }
