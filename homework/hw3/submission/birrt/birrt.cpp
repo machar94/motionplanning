@@ -10,9 +10,6 @@
 #include <vector>
 #include <algorithm>
 #include <math.h>
-#include <random>
-#include <time.h>
-#include <chrono>
 
 using namespace OpenRAVE;
 
@@ -21,20 +18,33 @@ using namespace OpenRAVE;
 #define NUM_SMOOTHING_ITER      200
 #define RESERVE_CAPACITY        10000
 
-static std::vector<double> noWristRollW = {5.0, 4.0, 3.0, 2.0, 1.0, 0.5, 0.0};
-static const float red[4] = {1,0,0,1};
-static const float blue[4] = {0,0,1,1};
+static std::vector<double> noWristRollW;
+static float red[4];
+static float blue[4];
+
+double genValue(double llim, double ulim)
+{
+    return (ulim - llim)*((double) rand() / (RAND_MAX)) + llim;
+}
 
 void normalizeWeights()
 {
+    noWristRollW.push_back(5.0);
+    noWristRollW.push_back(4.0);
+    noWristRollW.push_back(3.0);
+    noWristRollW.push_back(2.0);
+    noWristRollW.push_back(1.0);
+    noWristRollW.push_back(0.5);
+    noWristRollW.push_back(0.0);
+
     double sum = 0.0;
-    for (const auto & val : noWristRollW)
+    for (unsigned i = 0; i < noWristRollW.size(); ++i)
     {
-        sum += val;
+        sum += noWristRollW[i];
     }
-    for (auto & val : noWristRollW)
+    for (unsigned i = 0; i < noWristRollW.size(); ++i)
     {
-        val /= sum;
+        noWristRollW[i] /= sum;
     }
 }
 
@@ -157,7 +167,7 @@ void NodeTree::del(RRTNode* const node)
     nodes.erase(std::remove(nodes.begin(), nodes.end(), node), nodes.end());
 }
 
-std::vector<std::vector<dReal>> NodeTree::getPath(RRTNode* const node)
+std::vector<std::vector<dReal> > NodeTree::getPath(RRTNode* const node)
 {    
     RRTNode* curr = node;
     std::vector<std::vector<dReal> > path;
@@ -185,13 +195,13 @@ RRTNode* NodeTree::nearestNeighbor(const std::vector<double>& q) const
     double minDist = calcEuclidianDist(q, nodes[0]->getConfig(), noWristRollW);
     
 
-    for ( auto node : nodes )
+    for (unsigned i = 0; i < nodes.size(); ++i)
     {
-        double dist = calcEuclidianDist(q, node->getConfig(), noWristRollW);
+        double dist = calcEuclidianDist(q, nodes[i]->getConfig(), noWristRollW);
         if (dist < minDist)
         {
             minDist = dist;
-            nearestNeighbor = node;
+            nearestNeighbor = nodes[i];
         }
     }
     return nearestNeighbor;
@@ -224,8 +234,6 @@ private:
     std::vector<dReal> ulim;        // Upper limits of active joints
 
     int randseed;                   // Seed to generate random sequence (used for testing)
-    std::mt19937 gen;               // Random number generator
-    std::vector<std::uniform_real_distribution<double> > dists;
 
     RobotBasePtr probot;            // Holds pointer to the PR2 robot in scene
 
@@ -347,10 +355,10 @@ BiRRT::BiRRT(EnvironmentBasePtr penv, std::istream& ss)
                     "Run RRT Connect algorithm");
 
     normalizeWeights();
-
-    std::random_device rd;
+    red[0]  = 1.0; red[1]  = 0.0; red[2]  = 0.0; red[3] = 1.0;
+    blue[0] = 0.0; blue[1] = 0.0; blue[2] = 1.0; blue[3] = 1.0;
+ 
     srand(randseed);
-    gen.seed(rd());
 }
 
 bool BiRRT::SetGoal(std::ostream& sout, std::istream& sinput)
@@ -403,7 +411,6 @@ bool BiRRT::SetRandomSeed(std::ostream& sout, std::istream& sinput)
     randseed = atoi(sval.c_str());
 
     srand(randseed);
-    gen.seed(randseed);
 
     return true;
 } 
@@ -412,9 +419,9 @@ template <class T>
 void BiRRT::printVector(std::string s, const std::vector<T>& v) const
 {
     std::cout << s << " ";
-    for (const auto& val : v)
+    for (unsigned i = 0; i < v.size(); ++i)
     {
-        std::cout << val << " ";
+        std::cout << v[i] << " ";
     }
     std::cout << std::endl;
 }
@@ -433,12 +440,6 @@ bool BiRRT::Init(std::ostream& sout, std::istream& sinput)
     llim[6] = -PI;
     ulim[4] = PI;
     ulim[6] = PI;
-
-    for (unsigned i = 0; i < llim.size(); ++i)
-    {
-        std::uniform_real_distribution<double> dis(llim[i], ulim[i]);
-        dists.push_back(dis);
-    }
 
     return true;
 }
@@ -599,7 +600,7 @@ void BiRRT::sampleConfiguration(std::vector<double>& q)
     {
         for (unsigned i = 0; i < q.size(); ++i)
         {
-            q[i] = dists[i](gen);
+            q[i] = genValue(llim[i],ulim[i]);
         }
     } while (checkCollision(q));
 }
@@ -674,9 +675,10 @@ void BiRRT::plotTrajectory(const float color[4], std::vector<std::vector<double>
     // Set robot to that configuration
     std::vector<float> p(3,0.0);
 
-    for (auto it = path.begin(); it != path.end(); ++it)
+    for (unsigned i = 0; i < path.size(); ++i)
     {
-        probot->SetActiveDOFValues(*it);
+        probot->SetActiveDOFValues(path[i]);
+
         // Get the position of the end effector
         Transform endEffector = probot->GetLinks()[L_END_EFFECTOR_LINK_IDX]->GetTransform();
         p[0] = endEffector.trans.x;
@@ -770,13 +772,9 @@ void BiRRT::executeTrajectory(std::vector<std::vector<double> >& p)
     TrajectoryBasePtr traj = RaveCreateTrajectory(GetEnv(), "");
     traj->Init(probot->GetActiveConfigurationSpecification());
 
-    int i = 0;
-    std::vector<dReal> point;
-    for (auto it = p.begin(); it != p.end(); ++it)
+    for (unsigned i = 0; i < p.size(); ++i)
     {
-        point = *it;
-        traj->Insert(i, point);
-        i++;
+        traj->Insert(i, p[i]);
     }
     std::vector<double> limits(7, 1.0);
     OpenRAVE::planningutils::RetimeAffineTrajectory(traj, limits, limits);
