@@ -1,6 +1,7 @@
 #include <openrave/openrave.h>
 #include <openrave-core.h>
-
+#include <openrave/plannerparameters.h>
+#include <openrave/planningutils.h>
 #include <openrave/plugin.h>
 #include <boost/bind.hpp>
 
@@ -421,19 +422,18 @@ void RRTConnect::executeTrajectory(std::vector<std::vector<double> >& p)
     probot->SetActiveDOFValues(startQ);
 
     TrajectoryBasePtr traj = RaveCreateTrajectory(GetEnv(), "");
-    ConfigurationSpecification conspec = probot->GetActiveConfigurationSpecification("linear");
-    conspec.AddDeltaTimeGroup();
-    traj->Init(conspec);
+    traj->Init(probot->GetActiveConfigurationSpecification());
 
     int i = 0;
     std::vector<dReal> point;
     for (auto rit = p.rbegin(); rit != p.rend(); ++rit)
     {
         point = *rit;
-        point.push_back(i*0.01);
-        traj->Insert(i, point, conspec, true);
+        traj->Insert(i, point);
         i++;
     }
+    std::vector<double> limits(7, 1.0);
+    OpenRAVE::planningutils::RetimeAffineTrajectory(traj, limits, limits);
     probot->GetController()->SetPath(traj);
 }
 
@@ -666,13 +666,13 @@ bool RRTConnect::run(std::ostream& sout, std::istream& sinput)
     double pathDist = pathLength(path);
     
     // Time path smoothing
-    // startTime = time(NULL);
+    startTime = time(NULL);
     smoothPath();
     endTime = time(NULL);
     std::cout << "\nSmooth Time : " << endTime - startTime << std::endl;
     
     plotTrajectory(blue, smoothedPath);
-    // executeTrajectory(smoothedPath);
+    executeTrajectory(smoothedPath);
     
     pathDist = pathLength(path);
     double smoothedPathDist = pathLength(smoothedPath);
